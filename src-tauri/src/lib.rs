@@ -3,6 +3,7 @@ mod collection;
 mod epub;
 mod library_directory;
 mod reading_time;
+mod scan;
 use collection::{Candidate, Collection};
 use epub::{Book, Chapter, TocEntry};
 use serde::{Deserialize, Serialize};
@@ -43,6 +44,8 @@ struct Recent {
 struct Library {
     settings: library_directory::Settings,
     reading_ms: HashMap<String, u64>,
+    scan_directories: Vec<String>,
+    import_sources: HashMap<String, String>,
     recent: Vec<Recent>,
     collections: HashMap<String, Collection>,
     metadata: HashMap<String, BookMeta>,
@@ -257,6 +260,11 @@ fn open_scoped_from(
             if let Some(collection) = next.collections.remove(&previous.id) {
                 next.collections.insert(id.clone(), collection);
             }
+            for target in next.import_sources.values_mut() {
+                if *target == previous.id {
+                    *target = id.clone();
+                }
+            }
             let prefix = format!("{}::", previous.id);
             let keys: Vec<_> = next
                 .metadata
@@ -282,6 +290,12 @@ fn open_scoped_from(
                     next.metadata.insert(format!("{id}{suffix}"), meta);
                 }
             }
+        }
+    }
+    if let Some(original) = origin.and_then(|p| p.canonicalize().ok()) {
+        if original != canonical {
+            next.import_sources
+                .insert(original.to_string_lossy().to_string(), id.clone());
         }
     }
     let old = next.recent.iter().find(|r| r.id == id).cloned();
@@ -722,6 +736,9 @@ pub fn run() {
             close_book,
             frontend_ready,
             library_snapshot,
+            scan::scan_directories,
+            scan::set_scan_directories,
+            scan::scan_library,
             book_info::book_info,
             reading_time::save_reading_time,
             library_directory::library_settings,

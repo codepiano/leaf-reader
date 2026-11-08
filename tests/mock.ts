@@ -107,6 +107,37 @@ export async function mockDesktop(
             `http://epub.localhost/${encodeURIComponent(path)}`,
           invoke: async (command: string, args: Record<string, any> = {}) => {
             const s = load();
+            ((window as any).__mockCommands ||= []).push({
+              command,
+              args: copy(args),
+            });
+            if (command === "scan_directories") return s.scan_directories || [];
+            if (command === "set_scan_directories") {
+              if (args.directories.includes("/unavailable"))
+                throw "扫描目录无法访问或不是文件夹";
+              s.scan_directories = [...new Set(args.directories)];
+              save(s);
+              return s.scan_directories;
+            }
+            if (command === "scan_library") {
+              const before = s.books.length;
+              if (s.scan_directories?.length) {
+                ensure(s, "sample");
+                ensure(s, "anthology");
+              }
+              save(s);
+              const failed = localStorage.getItem("mock.scan_error") === "1";
+              return {
+                found: s.scan_directories?.length ? 2 : 0,
+                added: s.books.length - before,
+                existing: before,
+                failed: failed ? 1 : 0,
+                errors: failed
+                  ? ["/sources/broken.epub：文件不是有效的 EPUB"]
+                  : [],
+                truncated: localStorage.getItem("mock.scan_limit") === "1",
+              };
+            }
             if (command === "save_reading_time") {
               if (!active || active.token !== args.token) throw "书籍已关闭";
               if (s.settings?.track_reading_time === false) return;
@@ -172,8 +203,13 @@ export async function mockDesktop(
             if (command === "open_demo")
               return opened(anthology ? "anthology" : "sample");
             if (command === "plugin:dialog|open") {
-              if (args.options?.directory)
+              if (args.options?.directory) {
+                if (args.options.multiple)
+                  return JSON.parse(
+                    localStorage.getItem("mock.scan_pick") || "null",
+                  );
                 return localStorage.getItem("mock.directory") || null;
+              }
               return anthology ? "/anthology.epub" : "/sample.epub";
             }
             if (command === "open_book")

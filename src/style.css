@@ -1422,6 +1422,7 @@ select {
   margin-top: 22px;
 }
 .directory-path {
+  font-size: 12px;
   margin: 0;
   padding: 12px;
   background: var(--bg);
@@ -1470,4 +1471,33 @@ select {
 }
 .reading-preferences .check-label + .check-label {
   margin-top: 14px;
+}
+
+#scan-settings,
+#library-settings {
+  display: block;
+  width: fit-content;
+  margin-bottom: 8px;
+}
+.scan-directory-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.scan-directory-row .directory-path {
+  flex: 1;
+  min-width: 0;
+}
+.scan-directory-row wa-button {
+  flex-shrink: 0;
+}
+#scan-report {
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 18px;
+}
+#scan-report ul {
+  padding-left: 20px;
+  overflow-wrap: anywhere;
 }
