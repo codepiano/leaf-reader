@@ -1,0 +1,1453 @@
+{
+  "anthology": {
+    "author": "Leaf QA",
+    "candidates": [
+      {
+        "depth": 0,
+        "id": "toc-0",
+        "start": {
+          "chapter": 1,
+          "fragment": "a"
+        },
+        "suggested": false,
+        "title": "三册随笔合集"
+      },
+      {
+        "depth": 1,
+        "id": "toc-0-0",
+        "start": {
+          "chapter": 1,
+          "fragment": "a"
+        },
+        "suggested": true,
+        "title": "第一本：窗边"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-0-0",
+        "start": {
+          "chapter": 1,
+          "fragment": "a"
+        },
+        "suggested": false,
+        "title": "窗边的一小时"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-0-1",
+        "start": {
+          "chapter": 1,
+          "fragment": "a2"
+        },
+        "suggested": false,
+        "title": "留一点空白"
+      },
+      {
+        "depth": 1,
+        "id": "toc-0-1",
+        "start": {
+          "chapter": 2,
+          "fragment": "b"
+        },
+        "suggested": true,
+        "title": "第二本：散步"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-1-0",
+        "start": {
+          "chapter": 2,
+          "fragment": "b1"
+        },
+        "suggested": false,
+        "title": "熟悉的街道"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-1-1",
+        "start": {
+          "chapter": 2,
+          "fragment": "b2"
+        },
+        "suggested": false,
+        "title": "午后的光"
+      },
+      {
+        "depth": 1,
+        "id": "toc-0-2",
+        "start": {
+          "chapter": 2,
+          "fragment": "c"
+        },
+        "suggested": true,
+        "title": "第三本：夜读"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-2-0",
+        "start": {
+          "chapter": 2,
+          "fragment": "c"
+        },
+        "suggested": false,
+        "title": "灯下的时间"
+      }
+    ],
+    "chapters": [
+      {
+        "end_fragment": "",
+        "path": "OPS/preface.xhtml",
+        "start_fragment": "",
+        "title": "第 1 节"
+      },
+      {
+        "end_fragment": "",
+        "path": "OPS/a.xhtml",
+        "start_fragment": "",
+        "title": "窗边的一小时"
+      },
+      {
+        "end_fragment": "",
+        "path": "OPS/shared.xhtml",
+        "start_fragment": "",
+        "title": "第二本：散步"
+      }
+    ],
+    "collection": {
+      "enabled": false,
+      "parts": []
+    },
+    "id": "anthology",
+    "metadata": {
+      "favorite": false,
+      "group": "",
+      "tags": []
+    },
+    "part_id": null,
+    "path": "/anthology.epub",
+    "progress": {
+      "chapter": 0,
+      "fraction": 0.0
+    },
+    "source_title": "三册随笔合集",
+    "title": "三册随笔合集",
+    "toc": [
+      {
+        "chapter": null,
+        "children": [
+          {
+            "chapter": null,
+            "children": [
+              {
+                "chapter": 1,
+                "children": [],
+                "fragment": "a",
+                "id": "toc-0-0-0",
+                "title": "窗边的一小时"
+              },
+              {
+                "chapter": 1,
+                "children": [],
+                "fragment": "a2",
+                "id": "toc-0-0-1",
+                "title": "留一点空白"
+              }
+            ],
+            "fragment": "",
+            "id": "toc-0-0",
+            "title": "第一本：窗边"
+          },
+          {
+            "chapter": 2,
+            "children": [
+              {
+                "chapter": 2,
+                "children": [],
+                "fragment": "b1",
+                "id": "toc-0-1-0",
+                "title": "熟悉的街道"
+              },
+              {
+                "chapter": 2,
+                "children": [],
+                "fragment": "b2",
+                "id": "toc-0-1-1",
+                "title": "午后的光"
+              }
+            ],
+            "fragment": "b",
+            "id": "toc-0-1",
+            "title": "第二本：散步"
+          },
+          {
+            "chapter": null,
+            "children": [
+              {
+                "chapter": 2,
+                "children": [],
+                "fragment": "c",
+                "id": "toc-0-2-0",
+                "title": "灯下的时间"
+              }
+            ],
+            "fragment": "",
+            "id": "toc-0-2",
+            "title": "第三本：夜读"
+          }
+        ],
+        "fragment": "",
+        "id": "toc-0",
+        "title": "三册随笔合集"
+      }
+    ],
+    "token": "anthology-token"
+  },
+  "collection": {
+    "author": "Leaf QA",
+    "candidates": [
+      {
+        "depth": 0,
+        "id": "toc-0",
+        "start": {
+          "chapter": 1,
+          "fragment": "a"
+        },
+        "suggested": false,
+        "title": "三册随笔合集"
+      },
+      {
+        "depth": 1,
+        "id": "toc-0-0",
+        "start": {
+          "chapter": 1,
+          "fragment": "a"
+        },
+        "suggested": true,
+        "title": "第一本：窗边"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-0-0",
+        "start": {
+          "chapter": 1,
+          "fragment": "a"
+        },
+        "suggested": false,
+        "title": "窗边的一小时"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-0-1",
+        "start": {
+          "chapter": 1,
+          "fragment": "a2"
+        },
+        "suggested": false,
+        "title": "留一点空白"
+      },
+      {
+        "depth": 1,
+        "id": "toc-0-1",
+        "start": {
+          "chapter": 2,
+          "fragment": "b"
+        },
+        "suggested": true,
+        "title": "第二本：散步"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-1-0",
+        "start": {
+          "chapter": 2,
+          "fragment": "b1"
+        },
+        "suggested": false,
+        "title": "熟悉的街道"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-1-1",
+        "start": {
+          "chapter": 2,
+          "fragment": "b2"
+        },
+        "suggested": false,
+        "title": "午后的光"
+      },
+      {
+        "depth": 1,
+        "id": "toc-0-2",
+        "start": {
+          "chapter": 2,
+          "fragment": "c"
+        },
+        "suggested": true,
+        "title": "第三本：夜读"
+      },
+      {
+        "depth": 2,
+        "id": "toc-0-2-0",
+        "start": {
+          "chapter": 2,
+          "fragment": "c"
+        },
+        "suggested": false,
+        "title": "灯下的时间"
+      }
+    ],
+    "chapters": [
+      {
+        "end_fragment": "",
+        "path": "OPS/preface.xhtml",
+        "start_fragment": "",
+        "title": "第 1 节"
+      },
+      {
+        "end_fragment": "",
+        "path": "OPS/a.xhtml",
+        "start_fragment": "",
+        "title": "窗边的一小时"
+      },
+      {
+        "end_fragment": "",
+        "path": "OPS/shared.xhtml",
+        "start_fragment": "",
+        "title": "第二本：散步"
+      }
+    ],
+    "collection": {
+      "enabled": true,
+      "parts": [
+        {
+          "chapters": 1,
+          "end": {
+            "chapter": 1,
+            "fragment": ""
+          },
+          "id": "frontmatter",
+          "opened": 0,
+          "progress": {
+            "chapter": 0,
+            "fraction": 0.0
+          },
+          "start": {
+            "chapter": 0,
+            "fragment": ""
+          },
+          "title": "卷首内容"
+        },
+        {
+          "chapters": 1,
+          "end": {
+            "chapter": 2,
+            "fragment": ""
+          },
+          "id": "toc-0-0",
+          "opened": 0,
+          "progress": {
+            "chapter": 0,
+            "fraction": 0.0
+          },
+          "start": {
+            "chapter": 1,
+            "fragment": ""
+          },
+          "title": "第一本：窗边"
+        },
+        {
+          "chapters": 1,
+          "end": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "id": "toc-0-1",
+          "opened": 0,
+          "progress": {
+            "chapter": 0,
+            "fraction": 0.0
+          },
+          "start": {
+            "chapter": 2,
+            "fragment": ""
+          },
+          "title": "第二本：散步"
+        },
+        {
+          "chapters": 1,
+          "end": null,
+          "id": "toc-0-2",
+          "opened": 0,
+          "progress": {
+            "chapter": 0,
+            "fraction": 0.0
+          },
+          "start": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "title": "第三本：夜读"
+        }
+      ]
+    },
+    "id": "anthology",
+    "metadata": {
+      "favorite": false,
+      "group": "",
+      "tags": []
+    },
+    "part_id": null,
+    "path": "/anthology.epub",
+    "progress": {
+      "chapter": 0,
+      "fraction": 0.0
+    },
+    "source_title": "三册随笔合集",
+    "title": "三册随笔合集",
+    "toc": [
+      {
+        "chapter": null,
+        "children": [
+          {
+            "chapter": null,
+            "children": [
+              {
+                "chapter": 1,
+                "children": [],
+                "fragment": "a",
+                "id": "toc-0-0-0",
+                "title": "窗边的一小时"
+              },
+              {
+                "chapter": 1,
+                "children": [],
+                "fragment": "a2",
+                "id": "toc-0-0-1",
+                "title": "留一点空白"
+              }
+            ],
+            "fragment": "",
+            "id": "toc-0-0",
+            "title": "第一本：窗边"
+          },
+          {
+            "chapter": 2,
+            "children": [
+              {
+                "chapter": 2,
+                "children": [],
+                "fragment": "b1",
+                "id": "toc-0-1-0",
+                "title": "熟悉的街道"
+              },
+              {
+                "chapter": 2,
+                "children": [],
+                "fragment": "b2",
+                "id": "toc-0-1-1",
+                "title": "午后的光"
+              }
+            ],
+            "fragment": "b",
+            "id": "toc-0-1",
+            "title": "第二本：散步"
+          },
+          {
+            "chapter": null,
+            "children": [
+              {
+                "chapter": 2,
+                "children": [],
+                "fragment": "c",
+                "id": "toc-0-2-0",
+                "title": "灯下的时间"
+              }
+            ],
+            "fragment": "",
+            "id": "toc-0-2",
+            "title": "第三本：夜读"
+          }
+        ],
+        "fragment": "",
+        "id": "toc-0",
+        "title": "三册随笔合集"
+      }
+    ],
+    "token": "anthology-token"
+  },
+  "parts": {
+    "frontmatter": {
+      "author": "Leaf QA",
+      "candidates": [
+        {
+          "depth": 0,
+          "id": "toc-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": false,
+          "title": "三册随笔合集"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": true,
+          "title": "第一本：窗边"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-0-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": false,
+          "title": "窗边的一小时"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-0-1",
+          "start": {
+            "chapter": 1,
+            "fragment": "a2"
+          },
+          "suggested": false,
+          "title": "留一点空白"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-1",
+          "start": {
+            "chapter": 2,
+            "fragment": "b"
+          },
+          "suggested": true,
+          "title": "第二本：散步"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-1-0",
+          "start": {
+            "chapter": 2,
+            "fragment": "b1"
+          },
+          "suggested": false,
+          "title": "熟悉的街道"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-1-1",
+          "start": {
+            "chapter": 2,
+            "fragment": "b2"
+          },
+          "suggested": false,
+          "title": "午后的光"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-2",
+          "start": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "suggested": true,
+          "title": "第三本：夜读"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-2-0",
+          "start": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "suggested": false,
+          "title": "灯下的时间"
+        }
+      ],
+      "chapters": [
+        {
+          "end_fragment": "",
+          "path": "OPS/preface.xhtml",
+          "start_fragment": "",
+          "title": "卷首内容 · 第 1 节"
+        }
+      ],
+      "collection": {
+        "enabled": true,
+        "parts": [
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 1,
+              "fragment": ""
+            },
+            "id": "frontmatter",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 0,
+              "fragment": ""
+            },
+            "title": "卷首内容"
+          },
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 2,
+              "fragment": ""
+            },
+            "id": "toc-0-0",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 1,
+              "fragment": ""
+            },
+            "title": "第一本：窗边"
+          },
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 2,
+              "fragment": "c"
+            },
+            "id": "toc-0-1",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 2,
+              "fragment": ""
+            },
+            "title": "第二本：散步"
+          },
+          {
+            "chapters": 1,
+            "end": null,
+            "id": "toc-0-2",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 2,
+              "fragment": "c"
+            },
+            "title": "第三本：夜读"
+          }
+        ]
+      },
+      "id": "anthology",
+      "metadata": {
+        "favorite": false,
+        "group": "",
+        "tags": []
+      },
+      "part_id": "frontmatter",
+      "path": "/anthology.epub",
+      "progress": {
+        "chapter": 0,
+        "fraction": 0.0
+      },
+      "source_title": "三册随笔合集",
+      "title": "卷首内容",
+      "toc": [],
+      "token": "anthology-token"
+    },
+    "toc-0-0": {
+      "author": "Leaf QA",
+      "candidates": [
+        {
+          "depth": 0,
+          "id": "toc-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": false,
+          "title": "三册随笔合集"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": true,
+          "title": "第一本：窗边"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-0-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": false,
+          "title": "窗边的一小时"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-0-1",
+          "start": {
+            "chapter": 1,
+            "fragment": "a2"
+          },
+          "suggested": false,
+          "title": "留一点空白"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-1",
+          "start": {
+            "chapter": 2,
+            "fragment": "b"
+          },
+          "suggested": true,
+          "title": "第二本：散步"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-1-0",
+          "start": {
+            "chapter": 2,
+            "fragment": "b1"
+          },
+          "suggested": false,
+          "title": "熟悉的街道"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-1-1",
+          "start": {
+            "chapter": 2,
+            "fragment": "b2"
+          },
+          "suggested": false,
+          "title": "午后的光"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-2",
+          "start": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "suggested": true,
+          "title": "第三本：夜读"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-2-0",
+          "start": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "suggested": false,
+          "title": "灯下的时间"
+        }
+      ],
+      "chapters": [
+        {
+          "end_fragment": "",
+          "path": "OPS/a.xhtml",
+          "start_fragment": "",
+          "title": "窗边的一小时"
+        }
+      ],
+      "collection": {
+        "enabled": true,
+        "parts": [
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 1,
+              "fragment": ""
+            },
+            "id": "frontmatter",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 0,
+              "fragment": ""
+            },
+            "title": "卷首内容"
+          },
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 2,
+              "fragment": ""
+            },
+            "id": "toc-0-0",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 1,
+              "fragment": ""
+            },
+            "title": "第一本：窗边"
+          },
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 2,
+              "fragment": "c"
+            },
+            "id": "toc-0-1",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 2,
+              "fragment": ""
+            },
+            "title": "第二本：散步"
+          },
+          {
+            "chapters": 1,
+            "end": null,
+            "id": "toc-0-2",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 2,
+              "fragment": "c"
+            },
+            "title": "第三本：夜读"
+          }
+        ]
+      },
+      "id": "anthology",
+      "metadata": {
+        "favorite": false,
+        "group": "",
+        "tags": []
+      },
+      "part_id": "toc-0-0",
+      "path": "/anthology.epub",
+      "progress": {
+        "chapter": 0,
+        "fraction": 0.0
+      },
+      "source_title": "三册随笔合集",
+      "title": "第一本：窗边",
+      "toc": [
+        {
+          "chapter": null,
+          "children": [
+            {
+              "chapter": null,
+              "children": [
+                {
+                  "chapter": 0,
+                  "children": [],
+                  "fragment": "a",
+                  "id": "toc-0-0-0",
+                  "title": "窗边的一小时"
+                },
+                {
+                  "chapter": 0,
+                  "children": [],
+                  "fragment": "a2",
+                  "id": "toc-0-0-1",
+                  "title": "留一点空白"
+                }
+              ],
+              "fragment": "",
+              "id": "toc-0-0",
+              "title": "第一本：窗边"
+            }
+          ],
+          "fragment": "",
+          "id": "toc-0",
+          "title": "三册随笔合集"
+        }
+      ],
+      "token": "anthology-token"
+    },
+    "toc-0-1": {
+      "author": "Leaf QA",
+      "candidates": [
+        {
+          "depth": 0,
+          "id": "toc-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": false,
+          "title": "三册随笔合集"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": true,
+          "title": "第一本：窗边"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-0-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": false,
+          "title": "窗边的一小时"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-0-1",
+          "start": {
+            "chapter": 1,
+            "fragment": "a2"
+          },
+          "suggested": false,
+          "title": "留一点空白"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-1",
+          "start": {
+            "chapter": 2,
+            "fragment": "b"
+          },
+          "suggested": true,
+          "title": "第二本：散步"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-1-0",
+          "start": {
+            "chapter": 2,
+            "fragment": "b1"
+          },
+          "suggested": false,
+          "title": "熟悉的街道"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-1-1",
+          "start": {
+            "chapter": 2,
+            "fragment": "b2"
+          },
+          "suggested": false,
+          "title": "午后的光"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-2",
+          "start": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "suggested": true,
+          "title": "第三本：夜读"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-2-0",
+          "start": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "suggested": false,
+          "title": "灯下的时间"
+        }
+      ],
+      "chapters": [
+        {
+          "end_fragment": "c",
+          "path": "OPS/shared.xhtml",
+          "start_fragment": "",
+          "title": "第二本：散步"
+        }
+      ],
+      "collection": {
+        "enabled": true,
+        "parts": [
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 1,
+              "fragment": ""
+            },
+            "id": "frontmatter",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 0,
+              "fragment": ""
+            },
+            "title": "卷首内容"
+          },
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 2,
+              "fragment": ""
+            },
+            "id": "toc-0-0",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 1,
+              "fragment": ""
+            },
+            "title": "第一本：窗边"
+          },
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 2,
+              "fragment": "c"
+            },
+            "id": "toc-0-1",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 2,
+              "fragment": ""
+            },
+            "title": "第二本：散步"
+          },
+          {
+            "chapters": 1,
+            "end": null,
+            "id": "toc-0-2",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 2,
+              "fragment": "c"
+            },
+            "title": "第三本：夜读"
+          }
+        ]
+      },
+      "id": "anthology",
+      "metadata": {
+        "favorite": false,
+        "group": "",
+        "tags": []
+      },
+      "part_id": "toc-0-1",
+      "path": "/anthology.epub",
+      "progress": {
+        "chapter": 0,
+        "fraction": 0.0
+      },
+      "source_title": "三册随笔合集",
+      "title": "第二本：散步",
+      "toc": [
+        {
+          "chapter": null,
+          "children": [
+            {
+              "chapter": 0,
+              "children": [
+                {
+                  "chapter": 0,
+                  "children": [],
+                  "fragment": "b1",
+                  "id": "toc-0-1-0",
+                  "title": "熟悉的街道"
+                },
+                {
+                  "chapter": 0,
+                  "children": [],
+                  "fragment": "b2",
+                  "id": "toc-0-1-1",
+                  "title": "午后的光"
+                }
+              ],
+              "fragment": "b",
+              "id": "toc-0-1",
+              "title": "第二本：散步"
+            }
+          ],
+          "fragment": "",
+          "id": "toc-0",
+          "title": "三册随笔合集"
+        }
+      ],
+      "token": "anthology-token"
+    },
+    "toc-0-2": {
+      "author": "Leaf QA",
+      "candidates": [
+        {
+          "depth": 0,
+          "id": "toc-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": false,
+          "title": "三册随笔合集"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": true,
+          "title": "第一本：窗边"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-0-0",
+          "start": {
+            "chapter": 1,
+            "fragment": "a"
+          },
+          "suggested": false,
+          "title": "窗边的一小时"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-0-1",
+          "start": {
+            "chapter": 1,
+            "fragment": "a2"
+          },
+          "suggested": false,
+          "title": "留一点空白"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-1",
+          "start": {
+            "chapter": 2,
+            "fragment": "b"
+          },
+          "suggested": true,
+          "title": "第二本：散步"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-1-0",
+          "start": {
+            "chapter": 2,
+            "fragment": "b1"
+          },
+          "suggested": false,
+          "title": "熟悉的街道"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-1-1",
+          "start": {
+            "chapter": 2,
+            "fragment": "b2"
+          },
+          "suggested": false,
+          "title": "午后的光"
+        },
+        {
+          "depth": 1,
+          "id": "toc-0-2",
+          "start": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "suggested": true,
+          "title": "第三本：夜读"
+        },
+        {
+          "depth": 2,
+          "id": "toc-0-2-0",
+          "start": {
+            "chapter": 2,
+            "fragment": "c"
+          },
+          "suggested": false,
+          "title": "灯下的时间"
+        }
+      ],
+      "chapters": [
+        {
+          "end_fragment": "",
+          "path": "OPS/shared.xhtml",
+          "start_fragment": "c",
+          "title": "灯下的时间"
+        }
+      ],
+      "collection": {
+        "enabled": true,
+        "parts": [
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 1,
+              "fragment": ""
+            },
+            "id": "frontmatter",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 0,
+              "fragment": ""
+            },
+            "title": "卷首内容"
+          },
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 2,
+              "fragment": ""
+            },
+            "id": "toc-0-0",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 1,
+              "fragment": ""
+            },
+            "title": "第一本：窗边"
+          },
+          {
+            "chapters": 1,
+            "end": {
+              "chapter": 2,
+              "fragment": "c"
+            },
+            "id": "toc-0-1",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 2,
+              "fragment": ""
+            },
+            "title": "第二本：散步"
+          },
+          {
+            "chapters": 1,
+            "end": null,
+            "id": "toc-0-2",
+            "opened": 0,
+            "progress": {
+              "chapter": 0,
+              "fraction": 0.0
+            },
+            "start": {
+              "chapter": 2,
+              "fragment": "c"
+            },
+            "title": "第三本：夜读"
+          }
+        ]
+      },
+      "id": "anthology",
+      "metadata": {
+        "favorite": false,
+        "group": "",
+        "tags": []
+      },
+      "part_id": "toc-0-2",
+      "path": "/anthology.epub",
+      "progress": {
+        "chapter": 0,
+        "fraction": 0.0
+      },
+      "source_title": "三册随笔合集",
+      "title": "第三本：夜读",
+      "toc": [
+        {
+          "chapter": null,
+          "children": [
+            {
+              "chapter": null,
+              "children": [
+                {
+                  "chapter": 0,
+                  "children": [],
+                  "fragment": "c",
+                  "id": "toc-0-2-0",
+                  "title": "灯下的时间"
+                }
+              ],
+              "fragment": "",
+              "id": "toc-0-2",
+              "title": "第三本：夜读"
+            }
+          ],
+          "fragment": "",
+          "id": "toc-0",
+          "title": "三册随笔合集"
+        }
+      ],
+      "token": "anthology-token"
+    }
+  },
+  "sample": {
+    "author": "Leaf 编辑部",
+    "candidates": [
+      {
+        "depth": 0,
+        "id": "toc-0",
+        "start": {
+          "chapter": 0,
+          "fragment": ""
+        },
+        "suggested": true,
+        "title": "窗边的一小时"
+      },
+      {
+        "depth": 1,
+        "id": "toc-0-0",
+        "start": {
+          "chapter": 0,
+          "fragment": "window"
+        },
+        "suggested": false,
+        "title": "留一点空白"
+      },
+      {
+        "depth": 0,
+        "id": "toc-1",
+        "start": {
+          "chapter": 1,
+          "fragment": ""
+        },
+        "suggested": true,
+        "title": "散步的意义"
+      },
+      {
+        "depth": 0,
+        "id": "toc-2",
+        "start": {
+          "chapter": 2,
+          "fragment": ""
+        },
+        "suggested": true,
+        "title": "把时间还给自己"
+      }
+    ],
+    "chapters": [
+      {
+        "end_fragment": "",
+        "path": "OPS/ch1.xhtml",
+        "start_fragment": "",
+        "title": "窗边的一小时"
+      },
+      {
+        "end_fragment": "",
+        "path": "OPS/ch2.xhtml",
+        "start_fragment": "",
+        "title": "散步的意义"
+      },
+      {
+        "end_fragment": "",
+        "path": "OPS/ch3.xhtml",
+        "start_fragment": "",
+        "title": "把时间还给自己"
+      }
+    ],
+    "collection": {
+      "enabled": false,
+      "parts": []
+    },
+    "id": "sample",
+    "metadata": {
+      "favorite": false,
+      "group": "",
+      "tags": []
+    },
+    "part_id": null,
+    "path": "/sample.epub",
+    "progress": {
+      "chapter": 0,
+      "fraction": 0.0
+    },
+    "source_title": "缓慢的日常",
+    "title": "缓慢的日常",
+    "toc": [
+      {
+        "chapter": 0,
+        "children": [
+          {
+            "chapter": 0,
+            "children": [],
+            "fragment": "window",
+            "id": "toc-0-0",
+            "title": "留一点空白"
+          }
+        ],
+        "fragment": "",
+        "id": "toc-0",
+        "title": "窗边的一小时"
+      },
+      {
+        "chapter": 1,
+        "children": [],
+        "fragment": "",
+        "id": "toc-1",
+        "title": "散步的意义"
+      },
+      {
+        "chapter": 2,
+        "children": [],
+        "fragment": "",
+        "id": "toc-2",
+        "title": "把时间还给自己"
+      }
+    ],
+    "token": "sample-token"
+  }
+}

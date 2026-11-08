@@ -11,13 +11,18 @@ pub const RESOURCE_LIMIT: u64 = 32 * 1024 * 1024;
 pub struct Chapter {
     pub title: String,
     pub path: String,
+    #[serde(default)]
+    pub start_fragment: String,
+    #[serde(default)]
+    pub end_fragment: String,
 }
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TocEntry {
     pub title: String,
-    pub chapter: usize,
+    pub id: String,
+    pub chapter: Option<usize>,
     pub fragment: String,
-    pub depth: usize,
+    pub children: Vec<TocEntry>,
 }
 
 pub struct Book {
@@ -189,6 +194,8 @@ impl Book {
             chapters.push(Chapter {
                 title: format!("第 {} 节", chapters.len() + 1),
                 path: path.clone(),
+                start_fragment: String::new(),
+                end_fragment: String::new(),
             });
         }
         if chapters.is_empty() {
@@ -206,16 +213,8 @@ impl Book {
                                 || n.attribute("role") == Some("doc-toc"))
                     });
                     if let Some(root) = root {
-                        for link in root.descendants().filter(|n| n.has_tag_name("a")) {
-                            if let Some(href) = link.attribute("href") {
-                                let depth = link
-                                    .ancestors()
-                                    .take_while(|n| *n != root)
-                                    .filter(|n| n.has_tag_name("ol"))
-                                    .count()
-                                    .saturating_sub(1);
-                                add_toc(&mut toc, &chapters, &nav, href, text(link), depth);
-                            }
+                        if let Some(list) = root.children().find(|n| n.has_tag_name("ol")) {
+                            toc = nav_list(list, &chapters, &nav, "toc", 0)?;
                         }
                     }
                 }
@@ -225,31 +224,19 @@ impl Book {
             if let Some(ncx) = ncx_path {
                 if let Ok(source) = xml(&mut archive, &ncx) {
                     if let Ok(ncx_doc) = parse_xml(&source) {
-                        for point in ncx_doc.descendants().filter(|n| n.has_tag_name("navPoint")) {
-                            let href = point
-                                .children()
-                                .find(|n| n.has_tag_name("content"))
-                                .and_then(|n| n.attribute("src"));
-                            let label = point
-                                .children()
-                                .find(|n| n.has_tag_name("navLabel"))
-                                .map(text)
-                                .unwrap_or_default();
-                            let depth = point
-                                .ancestors()
-                                .filter(|n| n.has_tag_name("navPoint"))
-                                .count()
-                                .saturating_sub(1);
-                            if let Some(href) = href {
-                                add_toc(&mut toc, &chapters, &ncx, href, label, depth);
-                            }
+                        if let Some(map) = ncx_doc.descendants().find(|n| n.has_tag_name("navMap"))
+                        {
+                            toc = ncx_list(map, &chapters, &ncx, "toc", 0)?;
                         }
                     }
                 }
             }
         }
         for (index, chapter) in chapters.iter_mut().enumerate() {
-            if let Some(entry) = toc.iter().find(|entry| entry.chapter == index) {
+            if let Some(entry) = walk_toc(&toc)
+                .into_iter()
+                .find(|entry| entry.chapter == Some(index))
+            {
                 chapter.title = entry.title.clone();
             }
         }
@@ -259,9 +246,10 @@ impl Book {
                 .enumerate()
                 .map(|(chapter, c)| TocEntry {
                     title: c.title.clone(),
-                    chapter,
+                    id: format!("spine-{chapter}"),
+                    chapter: Some(chapter),
                     fragment: String::new(),
-                    depth: 0,
+                    children: Vec::new(),
                 })
                 .collect();
         }
@@ -274,29 +262,115 @@ impl Book {
         })
     }
 }
-fn add_toc(
-    toc: &mut Vec<TocEntry>,
+fn target(chapters: &[Chapter], base: &str, href: Option<&str>) -> (Option<usize>, String) {
+    let Some(href) = href else {
+        return (None, String::new());
+    };
+    let Ok(path) = resolve(base, href) else {
+        return (None, String::new());
+    };
+    let chapter = chapters.iter().position(|c| c.path == path);
+    let fragment = href
+        .split_once('#')
+        .map(|(_, f)| percent_decode_str(f).decode_utf8_lossy().into_owned())
+        .unwrap_or_default();
+    (chapter, fragment)
+}
+fn nav_list(
+    list: roxmltree::Node<'_, '_>,
     chapters: &[Chapter],
     base: &str,
-    href: &str,
-    title: String,
+    prefix: &str,
     depth: usize,
-) {
-    let Ok(path) = resolve(base, href) else {
-        return;
-    };
-    if let Some(chapter) = chapters.iter().position(|c| c.path == path) {
-        let fragment = href
-            .split_once('#')
-            .map(|(_, f)| percent_decode_str(f).decode_utf8_lossy().into_owned())
-            .unwrap_or_default();
-        toc.push(TocEntry {
-            title,
-            chapter,
-            fragment,
-            depth: depth.min(4),
-        });
+) -> Result<Vec<TocEntry>, String> {
+    if depth > 64 {
+        return Err("目录嵌套超过 64 层".into());
     }
+    list.children()
+        .filter(|n| n.has_tag_name("li"))
+        .enumerate()
+        .map(|(i, li)| {
+            let id = format!("{prefix}-{i}");
+            let label = li.descendants().find(|n| {
+                (n.has_tag_name("a") || n.has_tag_name("span"))
+                    && n.ancestors().find(|a| a.has_tag_name("li")) == Some(li)
+            });
+            let title = label
+                .map(text)
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| {
+                    li.children()
+                        .filter(|n| n.is_text())
+                        .filter_map(|n| n.text())
+                        .collect::<String>()
+                        .trim()
+                        .to_string()
+                });
+            let (chapter, fragment) =
+                target(chapters, base, label.and_then(|n| n.attribute("href")));
+            let children = match li.children().find(|n| n.has_tag_name("ol")) {
+                Some(n) => nav_list(n, chapters, base, &id, depth + 1)?,
+                None => Vec::new(),
+            };
+            Ok(TocEntry {
+                id,
+                title: if title.is_empty() {
+                    "未命名分组".into()
+                } else {
+                    title
+                },
+                chapter,
+                fragment,
+                children,
+            })
+        })
+        .collect()
+}
+fn ncx_list(
+    list: roxmltree::Node<'_, '_>,
+    chapters: &[Chapter],
+    base: &str,
+    prefix: &str,
+    depth: usize,
+) -> Result<Vec<TocEntry>, String> {
+    if depth > 64 {
+        return Err("目录嵌套超过 64 层".into());
+    }
+    list.children()
+        .filter(|n| n.has_tag_name("navPoint"))
+        .enumerate()
+        .map(|(i, point)| {
+            let id = format!("{prefix}-{i}");
+            let title = point
+                .children()
+                .find(|n| n.has_tag_name("navLabel"))
+                .map(text)
+                .unwrap_or_else(|| "未命名分组".into());
+            let href = point
+                .children()
+                .find(|n| n.has_tag_name("content"))
+                .and_then(|n| n.attribute("src"));
+            let (chapter, fragment) = target(chapters, base, href);
+            Ok(TocEntry {
+                children: ncx_list(point, chapters, base, &id, depth + 1)?,
+                id,
+                title,
+                chapter,
+                fragment,
+            })
+        })
+        .collect()
+}
+pub fn walk_toc(toc: &[TocEntry]) -> Vec<&TocEntry> {
+    fn visit<'a>(nodes: &'a [TocEntry], out: &mut Vec<&'a TocEntry>) {
+        for node in nodes {
+            out.push(node);
+            visit(&node.children, out);
+        }
+    }
+    let mut out = Vec::new();
+    visit(toc, &mut out);
+    out
 }
 
 #[cfg(test)]
@@ -348,8 +422,8 @@ mod tests {
         let mut book = Book::open(Path::new("../fixtures/quiet-days.epub")).unwrap();
         assert_eq!(book.title, "缓慢的日常");
         assert_eq!(book.chapters.len(), 3);
-        assert_eq!(book.toc.len(), 4);
-        assert_eq!(book.toc[1].fragment, "window");
+        assert_eq!(walk_toc(&book.toc).len(), 4);
+        assert_eq!(book.toc[0].children[0].fragment, "window");
         assert!(String::from_utf8(
             read(&mut book.archive, &book.chapters[0].path, XML_LIMIT).unwrap()
         )
@@ -361,10 +435,10 @@ mod tests {
     fn epub2_ncx_nested_and_missing_resources() {
         let path = fixture("<package><metadata><title>EPUB 2</title></metadata><manifest><item id='c' href='Text/ch.xhtml' media-type='application/xhtml+xml'/><item id='ncx' href='toc.ncx' media-type='application/x-dtbncx+xml'/></manifest><spine><itemref idref='c'/></spine></package>", &[("OPS/toc.ncx", "<!DOCTYPE ncx PUBLIC '-//NISO//DTD ncx 2005-1//EN' 'http://www.daisy.org/z3986/2005/ncx-2005-1.dtd'><ncx><navMap><navPoint><navLabel><text>章节标题</text></navLabel><content src='Text/ch.xhtml'/><navPoint><navLabel><text>子标题</text></navLabel><content src='Text/ch.xhtml#part'/></navPoint></navPoint></navMap></ncx>"), ("OPS/Text/ch.xhtml", "<html><body>Text</body></html>")]);
         let mut book = Book::open(&path).unwrap();
-        assert_eq!(book.toc.len(), 2);
+        assert_eq!(walk_toc(&book.toc).len(), 2);
         assert_eq!(book.chapters[0].title, "章节标题");
-        assert_eq!(book.toc[1].depth, 1);
-        assert_eq!(book.toc[1].fragment, "part");
+        assert_eq!(book.toc[0].children.len(), 1);
+        assert_eq!(book.toc[0].children[0].fragment, "part");
         assert!(read(&mut book.archive, "missing", RESOURCE_LIMIT).is_err());
         drop(book);
         std::fs::remove_file(path).unwrap();
@@ -394,6 +468,16 @@ mod tests {
         let mut book = Book::open(&path).unwrap();
         assert_eq!(book.chapters.len(), 1);
         assert!(read(&mut book.archive, "OPS/not-loaded.xhtml", RESOURCE_LIMIT).is_err());
+        drop(book);
+        std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn ncx_group_without_content_keeps_its_title_and_children() {
+        let path=fixture("<package><manifest><item id='a' href='a.xhtml' media-type='application/xhtml+xml'/><item id='n' href='toc.ncx' media-type='application/x-dtbncx+xml'/></manifest><spine><itemref idref='a'/></spine></package>",&[("OPS/toc.ncx","<ncx><navMap><navPoint><navLabel><text>无链接的子书分组</text></navLabel><navPoint><navLabel><text>第一章</text></navLabel><content src='a.xhtml'/></navPoint></navPoint></navMap></ncx>")]);
+        let book = Book::open(&path).unwrap();
+        assert_eq!(book.toc[0].title, "无链接的子书分组");
+        assert!(book.toc[0].chapter.is_none());
+        assert_eq!(book.toc[0].children[0].chapter, Some(0));
         drop(book);
         std::fs::remove_file(path).unwrap();
     }
