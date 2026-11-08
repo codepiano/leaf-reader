@@ -117,7 +117,6 @@ $("#app").innerHTML = `
   <main>
     <header class="topbar"><div id="breadcrumb">书架 <span>/</span> 全部书籍</div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开 EPUB</wa-button></div></header>
     <section id="library-view" class="library-view">
-      <div class="library-heading"><div><div class="eyebrow">A LITTLE SPACE FOR READING</div><h1>把时间，留给好书<span>。</span></h1><p>从一页开始，走进另一个世界。</p></div><span class="heading-note">少一点喧嚣<br>多一点阅读</span></div>
       <div class="shelf-heading"><h2>我的书架 <span id="shelf-count">0 本</span></h2><span class="muted">最近阅读</span></div>
       <div id="shelf" class="shelf"></div>
       <div id="empty" class="empty-state"><div class="empty-art">${icon("book")}<span class="art-leaf">${icon("leaf")}</span></div><h2>下一段旅程，从这里开始</h2><p>打开一本 EPUB，把喜欢的文字放在手边。<br>也可以将文件拖到窗口中。</p><wa-button id="empty-open" class="primary-button" size="small">${icon("folder")}选择本地书籍</wa-button><wa-button id="demo" class="text-button" size="small">先读一段示例 ${icon("arrow")}</wa-button><div class="empty-foot">无需账号 · 无需联网 · 只专注阅读</div></div>

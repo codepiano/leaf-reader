@@ -313,7 +313,7 @@ main {
   min-height: 0;
 }
 .topbar {
-  height: 88px;
+  height: 64px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--line);
   display: flex;
@@ -384,15 +384,9 @@ main {
 .library-view {
   overflow: auto;
   flex: 1;
-  padding: 50px 48px 0;
+  padding: 20px 36px 0;
   display: flex;
   flex-direction: column;
-}
-.library-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 46px;
 }
 .eyebrow {
   font-size: 9px;
@@ -406,40 +400,14 @@ h3,
 p {
   margin-top: 0;
 }
-.library-heading h1 {
-  font-family: "Songti SC", "Noto Serif CJK SC", Georgia, serif;
-  font-size: 32px;
-  font-weight: 500;
-  letter-spacing: 2px;
-  margin: 0 0 14px;
-}
-.library-heading h1 span {
-  color: var(--accent);
-}
-.library-heading p {
-  font-size: 12px;
-  color: var(--muted);
-  margin: 0;
-  letter-spacing: 0.7px;
-}
-.heading-note {
-  border-left: 1px solid var(--line);
-  padding: 5px 0 5px 20px;
-  font-family: "Songti SC", serif;
-  font-size: 12px;
-  line-height: 2;
-  color: var(--muted);
-  letter-spacing: 2px;
-  flex-shrink: 0;
-  margin-left: 20px;
-}
 .shelf-heading {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 17px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 26px;
+  margin-bottom: 16px;
 }
 .shelf-heading h2 {
   font-size: 14px;
@@ -555,7 +523,7 @@ p {
 }
 .shelf {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, var(--book-card-width, 160px));
   gap: 32px 28px;
   padding-bottom: 35px;
 }
@@ -570,7 +538,9 @@ p {
   align-self: start;
 }
 .book-cover {
+  width: 100%;
   aspect-ratio: 0.72;
+  height: calc(var(--book-card-width, 160px) / 0.72);
   background: #74816a;
   padding: 13px;
   position: relative;
@@ -590,27 +560,29 @@ p {
   background: #95896b;
 }
 .cover-frame {
+  position: absolute;
+  inset: clamp(8px, calc(var(--book-card-width, 160px) / 14), 16px);
   border: 1px solid #ffffff40;
-  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 18px 12px;
+  padding: clamp(8px, calc(var(--book-card-width, 160px) / 16), 15px) 8px;
   color: #fff9e9;
   text-align: center;
   overflow: hidden;
 }
 .cover-label {
-  font-size: 6px;
-  letter-spacing: 1.4px;
+  font-size: 5px;
+  letter-spacing: 0.6px;
 }
 .cover-frame h3 {
   font-family: "Songti SC", serif;
   font-weight: 400;
-  font-size: 24px;
-  line-height: 1.7;
-  letter-spacing: 4px;
-  margin: auto 0 12px;
+  font-size: clamp(16px, calc(var(--book-card-width, 160px) / 8), 26px);
+  line-height: 1.5;
+  letter-spacing: clamp(1px, calc(var(--book-card-width, 160px) / 80), 3px);
+  margin: auto 0 8px;
+  flex-shrink: 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -625,11 +597,12 @@ p {
   white-space: nowrap;
 }
 .cover-frame > .icon {
-  width: 33px;
-  height: 33px;
+  width: clamp(18px, calc(var(--book-card-width, 160px) / 8), 30px);
+  height: clamp(18px, calc(var(--book-card-width, 160px) / 8), 30px);
+  flex-shrink: 0;
   stroke-width: 0.7;
   opacity: 0.6;
-  margin: 22px auto;
+  margin: clamp(8px, calc(var(--book-card-width, 160px) / 18), 14px) auto;
 }
 .cover-footer {
   margin-top: auto;
@@ -978,13 +951,7 @@ select {
     padding: 0 26px;
   }
   .library-view {
-    padding: 38px 30px 0;
-  }
-  .library-heading h1 {
-    font-size: 26px;
-  }
-  .heading-note {
-    display: none;
+    padding: 18px 26px 0;
   }
   .shelf {
     gap: 25px 20px;
@@ -1081,7 +1048,7 @@ select {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: -8px 0 24px;
+  margin: 0 0 18px;
 }
 .shelf-tools .field-input {
   flex: 1;
@@ -1562,4 +1529,47 @@ select {
 }
 .status-finished {
   color: #7e6848;
+}
+
+.shelf-tools {
+  flex-wrap: wrap;
+}
+.shelf-tools .field-input {
+  min-width: 140px;
+}
+.shelf-size {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.shelf-size wa-button {
+  margin: 0;
+}
+.shelf-size wa-button::part(button) {
+  width: 26px;
+  height: 28px;
+  padding: 0;
+}
+.shelf-size input[type="range"] {
+  width: 75px;
+  margin: 0 3px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.shelf-size input:focus-visible {
+  outline: 2px solid var(--wa-color-focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.shelf-size output {
+  width: 25px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.shelf-tools #manage-groups {
+  margin-left: 0;
 }

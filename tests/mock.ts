@@ -25,6 +25,7 @@ export async function mockDesktop(
   broken = false,
   anthology = false,
   both = false,
+  coverMode: "none" | "slow" | "good" | "broken" = "none",
 ) {
   await page.addInitScript(
     ({ catalog, files, malicious, broken, anthology, both }) => {
@@ -339,9 +340,7 @@ export async function mockDesktop(
   await page.route("http://epub.localhost/**", async (route) => {
     const coverPath = new URL(route.request().url()).pathname;
     if (coverPath.startsWith("/cover/")) {
-      const mode = await page.evaluate(
-        () => localStorage.getItem("mock.cover") || "none",
-      );
+      const mode = coverMode;
       if (mode === "slow")
         await new Promise((resolve) => setTimeout(resolve, 1500));
       if (mode === "broken") {

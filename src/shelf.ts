@@ -1,3 +1,4 @@
+import { initShelfSize } from "./shelf-size";
 import { Covers } from "./covers";
 import { showBookInfo } from "./book-info";
 import { invoke } from "@tauri-apps/api/core";
@@ -54,6 +55,7 @@ export class Shelf {
       "afterend",
       '<div class="shelf-tools"><input id="shelf-search" class="field-input" type="search" aria-label="搜索书籍、作者和标签" placeholder="搜索书名、作者、标签…"><wa-button id="manage-groups" class="quiet-button" size="s">管理分组</wa-button></div><p id="filter-empty" class="filter-empty" hidden>这里还没有书籍。</p>',
     );
+    initShelfSize();
     document.body.insertAdjacentHTML(
       "beforeend",
       `
