@@ -45,6 +45,39 @@ export async function mockDesktop(
         localStorage.setItem("mock.library", JSON.stringify(s));
       const root = (id: string) =>
         copy(catalog[id === "sample" ? "sample" : "anthology"]);
+      const details = () => ({
+        title: "",
+        author: "",
+        publisher: "",
+        published: "",
+        isbn: "",
+        language: "",
+        description: "",
+      });
+      const resolved = (r: any, partId: string | null = null) => {
+        const part = partId
+          ? r.collection.parts.find((p: any) => p.id === partId)
+          : null;
+        const raw = {
+          ...details(),
+          title: part?.title || r.title,
+          author: r.author,
+        };
+        const overlay = (base: any, override: any) =>
+          Object.assign(
+            base,
+            Object.fromEntries(
+              Object.entries(override || {}).filter(
+                ([, value]) => value !== "",
+              ),
+            ),
+          );
+        const effective = overlay({ ...raw }, r.metadata.details);
+        if (part) effective.title = part.title;
+        const original = part ? { ...effective } : raw;
+        if (part) overlay(effective, r.part_metadata[partId!]?.details);
+        return { effective, original };
+      };
       const ensure = (state: any, id: string) => {
         let record = state.books.find((r: any) => r.id === id);
         if (record) return record;
@@ -105,6 +138,12 @@ export async function mockDesktop(
         view.metadata = copy(
           partId ? r.part_metadata[partId] || meta() : r.metadata,
         );
+        const information = resolved(r, partId).effective;
+        view.title = information.title;
+        view.author = information.author;
+        view.source_title = resolved(r).effective.title;
+        for (const part of view.collection.parts)
+          part.title = resolved(r, part.id).effective.title;
         view.id = id;
         view.path = r.path;
         view.token = `${id}-${Date.now()}-${Math.random()}`;
@@ -159,13 +198,27 @@ export async function mockDesktop(
               save(s);
               return;
             }
+            if (command === "edit_book_details") {
+              if (localStorage.getItem("mock.details_error"))
+                throw "保存图书信息失败";
+              const r = s.books.find((r: any) => r.id === args.sourceId);
+              const m = args.partId
+                ? (r.part_metadata[args.partId] ||= meta())
+                : r.metadata;
+              m.details = copy(args.details);
+              save(s);
+              return;
+            }
             if (command === "book_info") {
               const r = s.books.find((r: any) => r.id === args.sourceId);
               const part = args.partId
                 ? r.collection.parts.find((p: any) => p.id === args.partId)
                 : null;
               const missing = localStorage.getItem("mock.missing");
+              const information = resolved(r, args.partId || null);
               return {
+                details: information.effective,
+                original_details: information.original,
                 reading_ms: Object.entries(s.reading_ms || {})
                   .filter(
                     ([k]) =>
@@ -175,14 +228,14 @@ export async function mockDesktop(
                       (!args.partId && k.startsWith(args.sourceId + "::")),
                   )
                   .reduce((sum, [, v]) => sum + Number(v), 0),
-                title: part?.title || r.title,
-                author: r.author,
+                title: information.effective.title,
+                author: information.effective.author,
                 path: localStorage.getItem("mock.info-path") || r.path,
                 size: missing ? null : 2030,
                 modified: missing ? null : 1794153600000,
                 chapters: part?.chapters || r.chapters,
                 source_chapters: r.chapters,
-                source_title: part ? r.title : null,
+                source_title: part ? resolved(r).effective.title : null,
                 metadata: part
                   ? r.part_metadata[part.id] || meta()
                   : r.metadata,
@@ -209,7 +262,18 @@ export async function mockDesktop(
               save(s);
               return s.settings;
             }
-            if (command === "library_snapshot") return s;
+            if (command === "library_snapshot") {
+              const snapshot = copy(s);
+              for (const r of snapshot.books) {
+                const original = s.books.find((b: any) => b.id === r.id),
+                  info = resolved(original).effective;
+                r.title = info.title;
+                r.author = info.author;
+                for (const p of r.collection.parts)
+                  p.title = resolved(original, p.id).effective.title;
+              }
+              return snapshot;
+            }
             if (command === "list_recent") return s.books;
             if (command === "open_demo")
               return opened(anthology ? "anthology" : "sample");

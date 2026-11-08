@@ -1217,7 +1217,7 @@ select {
 }
 .dialog-actions {
   position: sticky;
-  bottom: 0;
+  bottom: -26px;
   z-index: 1;
   background: var(--card);
   padding-block: 12px;
@@ -1585,4 +1585,38 @@ select {
 .shelf-sort wa-select {
   width: 146px;
   margin: 0;
+}
+
+.details-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+#details-dialog .form-field {
+  margin-block: 14px;
+}
+#details-dialog .field-input {
+  width: 100%;
+  min-width: 0;
+}
+#details-dialog textarea {
+  resize: vertical;
+  min-height: 95px;
+  max-height: 260px;
+}
+#details-reset {
+  margin-right: auto;
+}
+.book-description {
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.book-description h3 {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.book-description p {
+  white-space: pre-wrap;
 }

@@ -157,7 +157,29 @@ window.addEventListener("leaf-preferences", (event) => {
 });
 initLibrarySettings(showError, () => flushProgress());
 initScanDirectories(showError, () => refreshShelf());
-initBookInfo(() => readingClock.flush());
+initBookInfo(
+  () => readingClock.flush(),
+  async (info, sourceId, partId) => {
+    await refreshShelf();
+    if (book && book.id === sourceId && book.part_id === partId) {
+      book.title = info.title;
+      book.author = info.author;
+      book.source_title = info.source_title || info.title;
+      book.metadata = info.metadata;
+      const part = book.collection.parts.find((p) => p.id === partId);
+      if (part) part.title = info.title;
+      $("#breadcrumb").textContent = partId
+        ? `${book.source_title} / ${book.title}`
+        : `阅读 / ${book.title}`;
+      document.title = `${book.title} · Leaf`;
+      tocTree.render(
+        book,
+        (c, f = 0, anchor = "") => void navigate(c, f, anchor),
+        (id) => void openPath(book!.path, false, id),
+      );
+    }
+  },
+);
 $("#book-info").onclick = () => {
   if (book) void showBookInfo(book.id, book.part_id);
 };

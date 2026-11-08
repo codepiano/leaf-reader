@@ -50,9 +50,11 @@ test("title, author and recent sorts persist and pins always lead across filters
   await expect.poll(order).toEqual(["pinned", "beta", "unknown", "alpha"]);
   await page.locator("#shelf-sort").click();
   await page.getByRole("option", { name: "书名", exact: true }).click();
+  await expect(page.locator("#shelf-sort").getByRole("listbox")).toBeHidden();
   await expect.poll(order).toEqual(["pinned", "alpha", "beta", "unknown"]);
   await page.locator("#shelf-sort").click();
   await page.getByRole("option", { name: "作者", exact: true }).click();
+  await expect(page.locator("#shelf-sort").getByRole("listbox")).toBeHidden();
   await expect.poll(order).toEqual(["pinned", "beta", "alpha", "unknown"]);
   await page.reload();
   await expect.poll(order).toEqual(["pinned", "beta", "alpha", "unknown"]);

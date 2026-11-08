@@ -148,7 +148,7 @@ export class Shelf {
             partId: p.id,
             path: r.path,
             title: p.title,
-            author: r.author,
+            author: r.part_metadata?.[p.id]?.details?.author || r.author,
             sourceTitle: r.title,
             chapters: p.chapters,
             progress: p.progress,

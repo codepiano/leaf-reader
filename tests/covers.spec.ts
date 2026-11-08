@@ -3,12 +3,21 @@ import { mockDesktop } from "./mock";
 test("books appear before delayed covers and missing covers keep fallback", async ({
   page,
 }) => {
-  await mockDesktop(page, false, false, false, true, "slow");
-  await page.goto("/");
+  await mockDesktop(page, false, false, false, true, "good");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("http://epub.localhost/cover/sample", async (route) => {
+    await gate;
+    await route.fallback();
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".book-card")).toHaveCount(2);
   await expect(
     page.locator('[data-book-key="sample"] .cover-frame'),
   ).toBeVisible();
+  release();
   await expect(
     page.locator('[data-book-key="sample"] .has-embedded-cover'),
   ).toHaveCount(1);

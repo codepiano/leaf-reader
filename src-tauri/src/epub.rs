@@ -79,7 +79,7 @@ pub fn read(archive: &mut ZipArchive<File>, path: &str, limit: u64) -> Result<Ve
     }
     Ok(bytes)
 }
-fn xml(archive: &mut ZipArchive<File>, path: &str) -> Result<String, String> {
+pub(crate) fn xml(archive: &mut ZipArchive<File>, path: &str) -> Result<String, String> {
     String::from_utf8(read(archive, path, XML_LIMIT)?)
         .map_err(|_| "书籍元数据不是 UTF-8 编码".into())
 }
@@ -92,7 +92,7 @@ fn text(node: roxmltree::Node<'_, '_>) -> String {
         .trim()
         .to_string()
 }
-fn parse_xml(source: &str) -> Result<Document<'_>, roxmltree::Error> {
+pub(crate) fn parse_xml(source: &str) -> Result<Document<'_>, roxmltree::Error> {
     Document::parse_with_options(
         source,
         roxmltree::ParsingOptions {

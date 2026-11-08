@@ -2,6 +2,8 @@ use super::*;
 
 #[derive(Serialize)]
 pub struct Info {
+    details: details::Details,
+    original_details: details::Details,
     title: String,
     reading_ms: u64,
     author: String,
@@ -46,6 +48,12 @@ pub fn info(state: &ReaderState, source_id: &str, part_id: Option<&str>) -> Resu
             ReadingStatus::Unread
         },
     );
+    let root_details = library
+        .metadata
+        .get(source_id)
+        .map(|m| m.details.clone())
+        .unwrap_or_default();
+    let source_title = details::names(&library, source_id, None, &book.title, &book.author).0;
     let key = item_key(source_id, part_id);
     let prefix = format!("{source_id}::");
     let reading_ms = library
@@ -66,19 +74,31 @@ pub fn info(state: &ReaderState, source_id: &str, part_id: Option<&str>) -> Resu
         Ok(_) => (None, None, Some("原路径不再是文件".into())),
         Err(e) => (None, None, Some(format!("文件已移动或无法访问：{e}"))),
     };
+    let mut original_details = details::original(Path::new(&book.path)).unwrap_or_default();
+    original_details.title = part
+        .as_ref()
+        .map(|p| p.title.clone())
+        .unwrap_or(book.title.clone());
+    original_details.author = book.author.clone();
+    let mut effective = original_details.clone();
+    effective.overlay(&root_details);
+    if let Some(part) = &part {
+        effective.title = part.title.clone();
+        original_details = effective.clone();
+    }
+    effective.overlay(&metadata.details);
     Ok(Info {
+        title: effective.title.clone(),
+        author: effective.author.clone(),
+        details: effective,
+        original_details,
         reading_ms,
-        title: part
-            .as_ref()
-            .map(|p| p.title.clone())
-            .unwrap_or(book.title.clone()),
-        author: book.author,
         path: book.path,
         size,
         modified,
         chapters: part.as_ref().map(|p| p.chapters).unwrap_or(book.chapters),
         source_chapters: book.chapters,
-        source_title: part.map(|_| book.title),
+        source_title: part.map(|_| source_title),
         metadata,
         file_error,
     })

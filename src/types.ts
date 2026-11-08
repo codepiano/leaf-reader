@@ -24,7 +24,26 @@ export type Part = {
 };
 export type Collection = { enabled: boolean; parts: Part[] };
 export type ReadingStatus = "unread" | "reading" | "finished";
+export type Details = {
+  title: string;
+  author: string;
+  publisher: string;
+  published: string;
+  isbn: string;
+  language: string;
+  description: string;
+};
+export const emptyDetails = (): Details => ({
+  title: "",
+  author: "",
+  publisher: "",
+  published: "",
+  isbn: "",
+  language: "",
+  description: "",
+});
 export type Metadata = {
+  details: Details;
   group: string;
   tags: string[];
   favorite: boolean;
@@ -81,6 +100,7 @@ export type ShelfItem = {
   metadata: Metadata;
 };
 export const emptyMeta = (): Metadata => ({
+  details: emptyDetails(),
   group: "",
   tags: [],
   favorite: false,

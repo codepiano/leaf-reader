@@ -1,6 +1,7 @@
 mod book_info;
 mod collection;
 mod cover;
+mod details;
 mod epub;
 mod library_directory;
 mod reading_time;
@@ -43,6 +44,7 @@ struct BookMeta {
     favorite: bool,
     pinned: bool,
     reading_status: Option<ReadingStatus>,
+    details: details::Details,
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct Recent {
@@ -141,7 +143,14 @@ fn snapshot(library: &Library) -> Snapshot {
             .recent
             .iter()
             .map(|r| {
-                let collection = library.collections.get(&r.id).cloned().unwrap_or_default();
+                let mut recent = r.clone();
+                (recent.title, recent.author) =
+                    details::names(library, &r.id, None, &r.title, &r.author);
+                let mut collection = library.collections.get(&r.id).cloned().unwrap_or_default();
+                for part in &mut collection.parts {
+                    part.title =
+                        details::names(library, &r.id, Some(&part.id), &part.title, &r.author).0;
+                }
                 let part_metadata = collection
                     .parts
                     .iter()
@@ -157,7 +166,7 @@ fn snapshot(library: &Library) -> Snapshot {
                     })
                     .collect();
                 ShelfEntry {
-                    recent: r.clone(),
+                    recent,
                     collection,
                     metadata: library.metadata.get(&r.id).cloned().unwrap_or_default(),
                     part_metadata,
@@ -208,20 +217,45 @@ fn make_opened(
     session.view_chapters = chapters.clone();
     session.part_id = part_id.map(str::to_string);
     session.token = token();
+    let (title, author) = details::names(
+        library,
+        &session.id,
+        part_id,
+        part.map(|p| p.title.as_str())
+            .unwrap_or(&session.book.title),
+        &session.book.author,
+    );
+    let source_title = details::names(
+        library,
+        &session.id,
+        None,
+        &session.book.title,
+        &session.book.author,
+    )
+    .0;
+    let mut display_collection = collection.clone();
+    for part in &mut display_collection.parts {
+        part.title = details::names(
+            library,
+            &session.id,
+            Some(&part.id),
+            &part.title,
+            &session.book.author,
+        )
+        .0;
+    }
     Ok(Opened {
         track_reading_time: library.settings.track_reading_time,
         token: session.token.clone(),
         id: session.id.clone(),
         path: recent.path.clone(),
-        title: part
-            .map(|p| p.title.clone())
-            .unwrap_or_else(|| session.book.title.clone()),
-        source_title: session.book.title.clone(),
-        author: session.book.author.clone(),
+        title,
+        source_title,
+        author,
         chapters,
         toc,
         progress,
-        collection: collection.clone(),
+        collection: display_collection,
         candidates: collection::candidates(&session.book.toc),
         part_id: session.part_id.clone(),
         metadata: library
@@ -830,6 +864,7 @@ pub fn run() {
             scan::set_scan_directories,
             scan::scan_library,
             book_info::book_info,
+            details::edit_book_details,
             reading_time::save_reading_time,
             library_directory::library_settings,
             library_directory::set_library_settings,
