@@ -150,7 +150,13 @@ mod tests {
     use super::*;
     use std::io::Write;
     fn fixture(metadata: &str, manifest: &str, guide: &str, image: &[u8]) -> PathBuf {
-        let path = std::env::temp_dir().join(format!("leaf-cover-{}.epub", token()));
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "leaf-cover-{}-{}-{}.epub",
+            std::process::id(),
+            token(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
         let mut writer = zip::ZipWriter::new(fs::File::create(&path).unwrap());
         let opf = format!("<package><metadata>{metadata}</metadata><manifest>{manifest}</manifest>{guide}</package>");
         for (name, bytes) in [

@@ -34,11 +34,18 @@ pub fn info(state: &ReaderState, source_id: &str, part_id: Option<&str>) -> Resu
         ),
         None => None,
     };
-    let metadata = library
+    let mut metadata = library
         .metadata
         .get(&item_key(source_id, part_id))
         .cloned()
         .unwrap_or_default();
+    metadata.reading_status.get_or_insert(
+        if part.as_ref().map(|p| p.opened).unwrap_or(book.opened) > 0 {
+            ReadingStatus::Reading
+        } else {
+            ReadingStatus::Unread
+        },
+    );
     let key = item_key(source_id, part_id);
     let prefix = format!("{source_id}::");
     let reading_ms = library

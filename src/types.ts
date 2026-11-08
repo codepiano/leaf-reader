@@ -23,7 +23,14 @@ export type Part = {
   opened: number;
 };
 export type Collection = { enabled: boolean; parts: Part[] };
-export type Metadata = { group: string; tags: string[]; favorite: boolean };
+export type ReadingStatus = "unread" | "reading" | "finished";
+export type Metadata = {
+  group: string;
+  tags: string[];
+  favorite: boolean;
+  pinned: boolean;
+  reading_status: ReadingStatus | null;
+};
 export type Candidate = {
   id: string;
   title: string;
@@ -77,6 +84,8 @@ export const emptyMeta = (): Metadata => ({
   group: "",
   tags: [],
   favorite: false,
+  pinned: false,
+  reading_status: null,
 });
 export const escapeHTML = (s: string) =>
   s.replace(

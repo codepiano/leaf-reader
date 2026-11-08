@@ -23,12 +23,26 @@ pub struct Progress {
     pub chapter: usize,
     pub fraction: f64,
 }
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum ReadingStatus {
+    Unread,
+    Reading,
+    Finished,
+}
+#[derive(Default, Deserialize)]
+struct BookFlags {
+    pinned: Option<bool>,
+    reading_status: Option<ReadingStatus>,
+}
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct BookMeta {
     group: String,
     tags: Vec<String>,
     favorite: bool,
+    pinned: bool,
+    reading_status: Option<ReadingStatus>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct Recent {
@@ -326,6 +340,13 @@ fn open_scoped_from(
             p.opened = now();
         }
     }
+    if part_id.is_some() || !next.collections.get(&id).is_some_and(|c| c.enabled) {
+        next.metadata
+            .entry(item_key(&id, part_id))
+            .or_default()
+            .reading_status
+            .get_or_insert(ReadingStatus::Reading);
+    }
     let mut session = Session {
         token: String::new(),
         id,
@@ -506,6 +527,7 @@ fn valid_name(value: &str) -> Result<String, String> {
     }
     Ok(value.to_string())
 }
+#[cfg(test)]
 fn update_metadata(
     state: &ReaderState,
     source_id: &str,
@@ -513,6 +535,25 @@ fn update_metadata(
     group: String,
     tags: Vec<String>,
     favorite: bool,
+) -> Result<(), String> {
+    update_metadata_with_flags(
+        state,
+        source_id,
+        part_id,
+        group,
+        tags,
+        favorite,
+        BookFlags::default(),
+    )
+}
+fn update_metadata_with_flags(
+    state: &ReaderState,
+    source_id: &str,
+    part_id: Option<&str>,
+    group: String,
+    tags: Vec<String>,
+    favorite: bool,
+    flags: BookFlags,
 ) -> Result<(), String> {
     let mut library = state.library.lock().map_err(|e| e.to_string())?;
     if !library.recent.iter().any(|r| r.id == source_id)
@@ -545,12 +586,21 @@ fn update_metadata(
     if !group.is_empty() && !next.groups.contains(&group) {
         next.groups.push(group.clone());
     }
+    let key = item_key(source_id, part_id);
+    let mut previous = next.metadata.get(&key).cloned().unwrap_or_default();
+    if let Some(pinned) = flags.pinned {
+        previous.pinned = pinned;
+    }
+    if let Some(status) = flags.reading_status {
+        previous.reading_status = Some(status);
+    }
     next.metadata.insert(
-        item_key(source_id, part_id),
+        key,
         BookMeta {
             group,
             tags: clean,
             favorite,
+            ..previous
         },
     );
     persist(state, &next)?;
@@ -565,15 +615,44 @@ fn edit_metadata(
     group: String,
     tags: Vec<String>,
     favorite: bool,
+    flags: Option<BookFlags>,
 ) -> Result<(), String> {
-    update_metadata(
+    update_metadata_with_flags(
         &state,
         &source_id,
         part_id.as_deref(),
         group,
         tags,
         favorite,
+        flags.unwrap_or_default(),
     )
+}
+#[tauri::command]
+fn pin_book(
+    state: tauri::State<ReaderState>,
+    source_id: String,
+    part_id: Option<String>,
+    pinned: bool,
+) -> Result<(), String> {
+    let mut library = state.library.lock().map_err(|e| e.to_string())?;
+    if !library.recent.iter().any(|r| r.id == source_id)
+        || part_id.as_ref().is_some_and(|id| {
+            !library
+                .collections
+                .get(&source_id)
+                .is_some_and(|c| c.parts.iter().any(|p| &p.id == id))
+        })
+    {
+        return Err("书籍不存在".into());
+    }
+    let mut next = library.clone();
+    next.metadata
+        .entry(item_key(&source_id, part_id.as_deref()))
+        .or_default()
+        .pinned = pinned;
+    persist(&state, &next)?;
+    *library = next;
+    Ok(())
 }
 fn change_group(
     state: &ReaderState,
@@ -756,6 +835,7 @@ pub fn run() {
             library_directory::set_library_settings,
             set_collection,
             edit_metadata,
+            pin_book,
             manage_group
         ])
         .run(tauri::generate_context!())
@@ -883,6 +963,63 @@ mod library_tests {
         assert!(snapshot.books[0].part_metadata[&first].group.is_empty());
         assert!(snapshot.books[0].part_metadata[&first].favorite);
         drop(state);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn manual_status_and_pins_are_independent_and_survive_reopen() {
+        let (state, dir) = state();
+        let path = Path::new("../fixtures/anthology.epub");
+        let root = open_path(&state, path).unwrap();
+        assert!(root.metadata.reading_status == Some(ReadingStatus::Reading));
+        update_metadata_with_flags(
+            &state,
+            &root.id,
+            None,
+            "文学".into(),
+            vec!["待读".into()],
+            true,
+            BookFlags {
+                pinned: Some(true),
+                reading_status: Some(ReadingStatus::Unread),
+            },
+        )
+        .unwrap();
+        let reopened = open_path(&state, path).unwrap();
+        assert!(reopened.metadata.reading_status == Some(ReadingStatus::Unread));
+        assert!(reopened.metadata.pinned);
+        // A favorite/tag edit cannot reset explicit classification or pinning.
+        update_metadata(&state, &root.id, None, "文学".into(), vec![], false).unwrap();
+        let reopened = open_path(&state, path).unwrap();
+        assert!(reopened.metadata.pinned);
+        assert!(reopened.metadata.reading_status == Some(ReadingStatus::Unread));
+        let ids: Vec<_> = reopened
+            .candidates
+            .iter()
+            .filter(|c| c.suggested)
+            .map(|c| c.id.clone())
+            .collect();
+        let all = configure_collection(&state, &reopened.token, true, &ids).unwrap();
+        let part = &all.collection.parts[1];
+        update_metadata_with_flags(
+            &state,
+            &root.id,
+            Some(&part.id),
+            "".into(),
+            vec![],
+            false,
+            BookFlags {
+                pinned: Some(false),
+                reading_status: Some(ReadingStatus::Finished),
+            },
+        )
+        .unwrap();
+        let child = open_scoped(&state, path, Some(&part.id)).unwrap();
+        assert!(child.metadata.reading_status == Some(ReadingStatus::Finished));
+        assert!(!child.metadata.pinned);
+        let saved: Library = serde_json::from_slice(&fs::read(&state.storage).unwrap()).unwrap();
+        assert!(saved.metadata[&root.id].pinned);
+        assert!(saved.metadata[&root.id].reading_status == Some(ReadingStatus::Unread));
+        assert!(serde_json::from_str::<BookFlags>(r#"{"reading_status":"invalid"}"#).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
     #[test]

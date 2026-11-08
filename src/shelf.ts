@@ -11,9 +11,22 @@ import {
 } from "./types";
 
 type Filter = {
-  kind: "all" | "recent" | "favorite" | "group" | "tag" | "collection";
+  kind:
+    "all" | "recent" | "favorite" | "group" | "tag" | "collection" | "status";
   value?: string;
 };
+const normalizedMeta = (
+  meta: ReturnType<typeof emptyMeta> | undefined,
+  opened: number,
+) => ({
+  ...emptyMeta(),
+  ...meta,
+  reading_status:
+    meta?.reading_status ??
+    (opened > 0 ? ("reading" as const) : ("unread" as const)),
+});
+const statusTitle = (status: string | null) =>
+  status === "finished" ? "读过" : status === "reading" ? "在读" : "未读";
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;
 export class Shelf {
@@ -35,7 +48,7 @@ export class Shelf {
       );
     $("#toc-panel").insertAdjacentHTML(
       "beforebegin",
-      '<div class="library-sections"><div class="section-label">书籍分组<button id="new-group" class="small-action" aria-label="新建分组">+</button></div><div id="group-list" class="filter-list"></div><div class="section-label">合集</div><div id="collection-list" class="filter-list"></div><div class="section-label">标签</div><div id="tag-list" class="tag-filter-list"></div></div>',
+      '<div class="library-sections"><div class="section-label">阅读分类</div><div id="reading-status-list" class="filter-list"></div><div class="section-label">书籍分组<button id="new-group" class="small-action" aria-label="新建分组">+</button></div><div id="group-list" class="filter-list"></div><div class="section-label">合集</div><div id="collection-list" class="filter-list"></div><div class="section-label">标签</div><div id="tag-list" class="tag-filter-list"></div></div>',
     );
     $(".shelf-heading").insertAdjacentHTML(
       "afterend",
@@ -44,7 +57,7 @@ export class Shelf {
     document.body.insertAdjacentHTML(
       "beforeend",
       `
-      <dialog id="metadata-dialog" class="app-dialog"><form method="dialog"><div class="dialog-heading"><div><div class="eyebrow">整理书籍</div><h2 id="metadata-title"></h2></div><wa-button class="icon-button dialog-close" aria-label="关闭书籍设置" size="s">×</wa-button></div><label class="form-field">分组<wa-select id="metadata-group" aria-label="书籍分组" size="s"></wa-select></label><label class="form-field">标签<input id="metadata-tags" class="field-input" placeholder="多个标签用逗号分隔" maxlength="1950"><span class="field-hint">例如：文学，待读，2026</span></label><label class="check-label"><input id="metadata-favorite" type="checkbox">收藏这本书</label><div class="dialog-actions"><wa-button class="quiet-button dialog-close" size="s">取消</wa-button><wa-button id="metadata-save" class="primary-button" size="s">保存</wa-button></div></form></dialog>
+      <dialog id="metadata-dialog" class="app-dialog"><form method="dialog"><div class="dialog-heading"><div><div class="eyebrow">整理书籍</div><h2 id="metadata-title"></h2></div><wa-button class="icon-button dialog-close" aria-label="关闭书籍设置" size="s">×</wa-button></div><label class="form-field">分组<wa-select id="metadata-group" aria-label="书籍分组" size="s"></wa-select></label><label class="form-field">阅读分类<wa-select id="metadata-status" aria-label="阅读分类" size="s"><wa-option value="unread">未读</wa-option><wa-option value="reading">在读</wa-option><wa-option value="finished">读过</wa-option></wa-select></label><label class="check-label"><input id="metadata-pinned" type="checkbox">置顶这本书</label><label class="form-field">标签<input id="metadata-tags" class="field-input" placeholder="多个标签用逗号分隔" maxlength="1950"><span class="field-hint">例如：文学，待读，2026</span></label><label class="check-label"><input id="metadata-favorite" type="checkbox">收藏这本书</label><div class="dialog-actions"><wa-button class="quiet-button dialog-close" size="s">取消</wa-button><wa-button id="metadata-save" class="primary-button" size="s">保存</wa-button></div></form></dialog>
       <dialog id="groups-dialog" class="app-dialog"><div class="dialog-heading"><h2>管理分组</h2><wa-button class="icon-button dialog-close" aria-label="关闭分组管理" size="s">×</wa-button></div><form id="new-group-form" class="group-create"><input id="group-name" class="field-input" required maxlength="64" aria-label="新分组名称" placeholder="新分组名称"><wa-button id="group-create" class="primary-button" size="s">新建</wa-button></form><div id="group-editor"></div><p class="field-hint">删除分组后，书籍会回到“未分组”。</p></dialog>`,
     );
     document
@@ -84,6 +97,8 @@ export class Shelf {
       if (!item) return;
       if (target.dataset.action === "read")
         this.open(item.path, item.partId ?? undefined);
+      if (target.dataset.action === "pin")
+        void this.pin(item, target as WaButton);
       if (target.dataset.action === "info")
         void showBookInfo(item.sourceId, item.partId);
       if (target.dataset.action === "metadata") void this.edit(item);
@@ -122,7 +137,7 @@ export class Shelf {
             chapters: p.chapters,
             progress: p.progress,
             opened: p.opened,
-            metadata: r.part_metadata?.[p.id] ?? emptyMeta(),
+            metadata: normalizedMeta(r.part_metadata?.[p.id], p.opened),
           }))
         : [
             {
@@ -135,7 +150,7 @@ export class Shelf {
               chapters: r.chapters,
               progress: r.progress,
               opened: r.opened,
-              metadata: r.metadata ?? emptyMeta(),
+              metadata: normalizedMeta(r.metadata, r.opened),
             },
           ],
     );
@@ -169,6 +184,16 @@ export class Shelf {
       count: number,
     ) =>
       `<button class="filter-item ${this.filter.kind === kind && this.filter.value === value ? "active" : ""}" data-filter="${kind}" data-value="${esc(value)}" title="${esc(title)}"><span>${esc(title)}</span><small>${count}</small></button>`;
+    $("#reading-status-list").innerHTML = ["unread", "reading", "finished"]
+      .map((status) =>
+        filterButton(
+          "status",
+          status,
+          statusTitle(status),
+          all.filter((i) => i.metadata.reading_status === status).length,
+        ),
+      )
+      .join("");
     $("#group-list").innerHTML =
       filterButton(
         "group",
@@ -217,17 +242,19 @@ export class Shelf {
   renderCards() {
     const all = this.items();
     let list = all.filter((i) =>
-      this.filter.kind === "favorite"
-        ? i.metadata.favorite
-        : this.filter.kind === "recent"
-          ? i.opened > 0
-          : this.filter.kind === "group"
-            ? i.metadata.group === (this.filter.value ?? "")
-            : this.filter.kind === "tag"
-              ? i.metadata.tags.includes(this.filter.value!)
-              : this.filter.kind === "collection"
-                ? i.sourceId === this.filter.value
-                : true,
+      this.filter.kind === "status"
+        ? i.metadata.reading_status === this.filter.value
+        : this.filter.kind === "favorite"
+          ? i.metadata.favorite
+          : this.filter.kind === "recent"
+            ? i.opened > 0
+            : this.filter.kind === "group"
+              ? i.metadata.group === (this.filter.value ?? "")
+              : this.filter.kind === "tag"
+                ? i.metadata.tags.includes(this.filter.value!)
+                : this.filter.kind === "collection"
+                  ? i.sourceId === this.filter.value
+                  : true,
     );
     const q = this.query.trim().toLocaleLowerCase();
     if (q)
@@ -237,24 +264,32 @@ export class Shelf {
           .toLocaleLowerCase()
           .includes(q),
       );
-    list.sort((a, b) => b.opened - a.opened);
+    list.sort(
+      (a, b) =>
+        Number(b.metadata.pinned) - Number(a.metadata.pinned) ||
+        b.opened - a.opened,
+    );
     const source = this.data.books.find((r) => r.id === this.filter.value);
     const title =
-      this.filter.kind === "recent"
-        ? "最近阅读"
-        : this.filter.kind === "favorite"
-          ? "我的收藏"
-          : this.filter.kind === "group"
-            ? this.filter.value || "未分组"
-            : this.filter.kind === "tag"
-              ? `标签 · ${this.filter.value}`
-              : this.filter.kind === "collection"
-                ? (source?.title ?? "合集")
-                : "我的书架";
+      this.filter.kind === "status"
+        ? statusTitle(this.filter.value!)
+        : this.filter.kind === "recent"
+          ? "最近阅读"
+          : this.filter.kind === "favorite"
+            ? "我的收藏"
+            : this.filter.kind === "group"
+              ? this.filter.value || "未分组"
+              : this.filter.kind === "tag"
+                ? `标签 · ${this.filter.value}`
+                : this.filter.kind === "collection"
+                  ? (source?.title ?? "合集")
+                  : "我的书架";
     $(".shelf-heading h2").innerHTML =
       `${esc(title)} <span id="shelf-count">${list.length} 本</span>`;
     $(".shelf-heading>.muted").textContent =
-      this.filter.kind === "recent" ? "按最后打开时间排序" : "按最近阅读排序";
+      this.filter.kind === "recent"
+        ? "置顶优先 · 最后打开时间"
+        : "置顶优先 · 最近阅读";
     $("#empty").hidden = all.length > 0;
     $("#filter-empty").hidden = !all.length || list.length > 0;
     $(".shelf-tools").toggleAttribute("hidden", all.length === 0);
@@ -286,7 +321,21 @@ export class Shelf {
           minute: "2-digit",
         }).format(i.opened < 1e12 ? i.opened * 1000 : i.opened)
       : "尚未阅读";
-    return `<article class="book-tile" data-book-key="${esc(i.key)}"><button class="book-card" data-action="read" data-key="${esc(i.key)}" aria-label="继续阅读 ${esc(i.title)}"><div class="book-cover cover-${n % 4}"><div class="cover-frame"><span class="cover-label">THE READING COLLECTION</span><h3>${esc(i.title)}</h3><span class="cover-author">${esc(i.author || "佚名")}</span>${this.icon("leaf")}<span class="cover-footer">${i.partId ? "COLLECTION" : "LEAF"} / ${String(n + 1).padStart(2, "0")}</span></div><img class="embedded-cover" data-cover-id="${esc(i.sourceId)}" alt="" decoding="async" aria-hidden="true"><span class="cover-spine"></span></div><div class="book-info"><h3 title="${esc(i.title)}">${esc(i.title)}</h3><p>${esc(i.author || "作者未知")}</p><div class="book-progress"><span>${progress}% 已读</span>${this.icon("arrow")}</div></div></button>${i.sourceTitle ? `<button class="source-link" data-action="collection" data-key="${esc(i.key)}" title="${esc(i.sourceTitle)}">合集 · ${esc(i.sourceTitle)}</button>` : ""}<div class="book-tags">${i.metadata.tags.map((t) => `<span title="${esc(t)}">${esc(t)}</span>`).join("")}</div><div class="book-actions"><span class="read-time">${esc(time)}</span><wa-button class="icon-button favorite-button ${i.metadata.favorite ? "is-favorite" : ""}" size="s" data-action="favorite" data-key="${esc(i.key)}" aria-label="${i.metadata.favorite ? "取消收藏" : "收藏"} ${esc(i.title)}" title="${i.metadata.favorite ? "取消收藏" : "收藏"}">${i.metadata.favorite ? "★" : "☆"}</wa-button><wa-button class="icon-button" size="s" data-action="info" data-key="${esc(i.key)}" aria-label="图书信息 ${esc(i.title)}" title="图书信息">ⓘ</wa-button><wa-button class="icon-button" size="s" data-action="metadata" data-key="${esc(i.key)}" aria-label="整理 ${esc(i.title)}" title="分组与标签">···</wa-button></div></article>`;
+    return `<article class="book-tile" data-book-key="${esc(i.key)}"><button class="book-card" data-action="read" data-key="${esc(i.key)}" aria-label="继续阅读 ${esc(i.title)}"><div class="book-cover cover-${n % 4}"><div class="cover-frame"><span class="cover-label">THE READING COLLECTION</span><h3>${esc(i.title)}</h3><span class="cover-author">${esc(i.author || "佚名")}</span>${this.icon("leaf")}<span class="cover-footer">${i.partId ? "COLLECTION" : "LEAF"} / ${String(n + 1).padStart(2, "0")}</span></div><img class="embedded-cover" data-cover-id="${esc(i.sourceId)}" alt="" decoding="async" aria-hidden="true"><span class="cover-spine"></span><div class="book-badges">${i.metadata.pinned ? '<span class="book-badge pin-badge">置顶</span>' : ""}${i.metadata.favorite ? '<span class="book-badge favorite-badge" aria-label="已收藏">★ 收藏</span>' : ""}</div></div><div class="book-info"><h3 title="${esc(i.title)}">${esc(i.title)}</h3><p>${esc(i.author || "作者未知")}</p><div class="book-progress"><span>${progress}% 已读</span>${this.icon("arrow")}</div></div></button>${i.sourceTitle ? `<button class="source-link" data-action="collection" data-key="${esc(i.key)}" title="${esc(i.sourceTitle)}">合集 · ${esc(i.sourceTitle)}</button>` : ""}<span class="book-status status-${i.metadata.reading_status}">${statusTitle(i.metadata.reading_status)}</span><div class="book-tags">${i.metadata.tags.map((t) => `<span title="${esc(t)}">${esc(t)}</span>`).join("")}</div><div class="book-actions"><span class="read-time">${esc(time)}</span><wa-button class="icon-button favorite-button ${i.metadata.favorite ? "is-favorite" : ""}" size="s" data-action="favorite" data-key="${esc(i.key)}" aria-label="${i.metadata.favorite ? "取消收藏" : "收藏"} ${esc(i.title)}" title="${i.metadata.favorite ? "取消收藏" : "收藏"}">${i.metadata.favorite ? "★" : "☆"}</wa-button><wa-button class="icon-button pin-button" size="s" data-action="pin" data-key="${esc(i.key)}" aria-label="${i.metadata.pinned ? "取消置顶" : "置顶"} ${esc(i.title)}" title="${i.metadata.pinned ? "取消置顶" : "置顶"}">${i.metadata.pinned ? "↓" : "↑"}</wa-button><wa-button class="icon-button" size="s" data-action="info" data-key="${esc(i.key)}" aria-label="图书信息 ${esc(i.title)}" title="图书信息">ⓘ</wa-button><wa-button class="icon-button" size="s" data-action="metadata" data-key="${esc(i.key)}" aria-label="整理 ${esc(i.title)}" title="分组与标签">···</wa-button></div></article>`;
+  }
+  async pin(item: ShelfItem, button: WaButton) {
+    button.disabled = true;
+    try {
+      await invoke("pin_book", {
+        sourceId: item.sourceId,
+        partId: item.partId,
+        pinned: !item.metadata.pinned,
+      });
+      await this.refresh();
+    } catch (e) {
+      this.reportError(e);
+      button.disabled = false;
+    }
   }
   async favorite(item: ShelfItem, button: WaButton) {
     button.disabled = true;
@@ -318,6 +367,9 @@ export class Shelf {
           .map((g) => `<wa-option value="${esc(g)}">${esc(g)}</wa-option>`)
           .join("");
       select.value = item.metadata.group;
+      $<WaSelect>("#metadata-status").value =
+        item.metadata.reading_status ?? "unread";
+      $<HTMLInputElement>("#metadata-pinned").checked = item.metadata.pinned;
       $<HTMLInputElement>("#metadata-tags").value =
         item.metadata.tags.join("，");
       $<HTMLInputElement>("#metadata-favorite").checked =
@@ -336,6 +388,17 @@ export class Shelf {
                 .map((t) => t.trim())
                 .filter(Boolean),
               favorite: $<HTMLInputElement>("#metadata-favorite").checked,
+              flags: {
+                pinned: $<HTMLInputElement>("#metadata-pinned").checked,
+                ...(String($<WaSelect>("#metadata-status").value) !==
+                item.metadata.reading_status
+                  ? {
+                      reading_status: String(
+                        $<WaSelect>("#metadata-status").value,
+                      ),
+                    }
+                  : {}),
+              },
             });
             await this.refresh();
             $<HTMLDialogElement>("#metadata-dialog").close();

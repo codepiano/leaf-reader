@@ -1527,3 +1527,39 @@ select {
 .has-embedded-cover .cover-spine {
   visibility: hidden;
 }
+
+.book-badges {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-end;
+}
+.book-badge {
+  padding: 4px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: #fff9eb;
+  color: #6b5523;
+  box-shadow: 0 1px 4px #0002;
+}
+.pin-badge {
+  background: #ecf1e8;
+  color: #385331;
+}
+.book-status {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 7px;
+}
+.status-reading {
+  color: var(--accent);
+}
+.status-finished {
+  color: #7e6848;
+}

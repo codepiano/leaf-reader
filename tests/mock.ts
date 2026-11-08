@@ -29,7 +29,13 @@ export async function mockDesktop(
   await page.addInitScript(
     ({ catalog, files, malicious, broken, anthology, both }) => {
       const copy = (v: any) => JSON.parse(JSON.stringify(v));
-      const meta = () => ({ group: "", tags: [], favorite: false });
+      const meta = () => ({
+        group: "",
+        tags: [],
+        favorite: false,
+        pinned: false,
+        reading_status: null as string | null,
+      });
       const load = () =>
         JSON.parse(
           localStorage.getItem("mock.library") || '{"books":[],"groups":[]}',
@@ -83,6 +89,10 @@ export async function mockDesktop(
         if (markRead) {
           if (p) p.opened = Date.now();
           else if (!r.collection.enabled) r.opened = Date.now();
+        }
+        if (markRead && (p || !r.collection.enabled)) {
+          const m = p ? (r.part_metadata[p.id] ||= meta()) : r.metadata;
+          m.reading_status ??= "reading";
         }
         view.collection = copy(r.collection);
         view.progress =
@@ -264,9 +274,22 @@ export async function mockDesktop(
               save(s);
               return opened(active.id, null, false);
             }
+            if (command === "pin_book") {
+              const r = s.books.find((r: any) => r.id === args.sourceId);
+              const m = args.partId
+                ? (r.part_metadata[args.partId] ||= meta())
+                : r.metadata;
+              m.pinned = args.pinned;
+              save(s);
+              return;
+            }
             if (command === "edit_metadata") {
               const r = s.books.find((r: any) => r.id === args.sourceId),
                 m = {
+                  ...(args.partId
+                    ? r.part_metadata[args.partId] || meta()
+                    : r.metadata),
+                  ...(args.flags || {}),
                   group: args.group.trim(),
                   tags: [...new Set(args.tags.map((t: string) => t.trim()))],
                   favorite: args.favorite,
