@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1437 --strictPort",
+    "dev:desktop": "node scripts/tauri.mjs dev --config src-tauri/tauri.dev.conf.json",
     "build": "tsc --noEmit && vite build",
     "tauri": "node scripts/tauri.mjs",
     "test:ui": "playwright test"

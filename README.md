@@ -17,9 +17,13 @@
 
 ```sh
 npm ci
-npm run tauri -- dev
+npm run dev:desktop
 npm run tauri -- build
 ```
+
+日常迭代使用 `npm run dev:desktop`，保持开发实例运行；前端修改由 Vite 热更新，Rust 修改由 Tauri 增量编译并重启。首次启动需要编译 Rust，后续不需要生成发布包。`npm run dev` 只启动网页预览，不提供本地 EPUB 功能。
+
+开发窗口标题为 `Leaf Dev · 本地阅读`，应用标识为 `local.leaf.reader.dev`，阅读记录和 WebView 存储与正式版隔离。macOS 开发记录位于 `~/Library/Application Support/local.leaf.reader.dev`。开发模式的内存和启动耗时不代表发布版性能；需要性能验收或用户要求发布时再生成 release 包。测试、类型检查和验证构建继续在独立副本执行，不影响正在使用的开发实例。
 
 macOS 的应用输出在 `src-tauri/target/release/bundle/macos/Leaf.app`。Windows / Linux 应在各自平台构建、验证。首次开发在这台 Mac 上安装了独立 Rust 工具链到 `~/Library/Caches/leaf-toolchain`，未修改 shell 配置；`scripts/tauri.mjs` 会在系统找不到 Cargo 时使用它。
 

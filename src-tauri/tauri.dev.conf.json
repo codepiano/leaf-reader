@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Leaf Dev",
+  "identifier": "local.leaf.reader.dev",
+  "app": {
+    "windows": [
+      {
+        "title": "Leaf Dev · 本地阅读",
+        "width": 1180,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 560,
+        "backgroundColor": "#f6f5f0"
+      }
+    ]
+  }
+}
