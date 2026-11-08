@@ -8,3 +8,16 @@ test-results/
 playwright-report/
 artifacts/
 __pycache__/
+
+# Local books, credentials, application data and backups
+.env
+.env.*
+!.env.example
+.dev/
+/data/
+/backups/
+/library.json
+/library.tmp
+*.log
+*.epub
+!/fixtures/*.epub
