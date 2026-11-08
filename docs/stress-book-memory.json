@@ -1,0 +1,26 @@
+{
+  "scenario": "64.1 MiB synthetic EPUB; 256 chapters; chapter 1 displayed",
+  "footprint_mib": 137.9,
+  "processes": [
+    {
+      "pid": 23855,
+      "name": "leaf-reader",
+      "footprint_bytes": 28804272
+    },
+    {
+      "pid": 23931,
+      "name": "com.apple.WebKit.GPU",
+      "footprint_bytes": 18302008
+    },
+    {
+      "pid": 23932,
+      "name": "com.apple.WebKit.WebContent",
+      "footprint_bytes": 90784848
+    },
+    {
+      "pid": 23934,
+      "name": "com.apple.WebKit.Networking",
+      "footprint_bytes": 6717896
+    }
+  ]
+}

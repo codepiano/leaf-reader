@@ -1,0 +1,170 @@
+{
+  "binary_bytes": 4530096,
+  "samples": [
+    {
+      "run": 1,
+      "startup_ms": 1991.8,
+      "rss_mib": 176.3,
+      "footprint_mib": 86.2,
+      "processes": [
+        {
+          "pid": 25214,
+          "parent": 25188,
+          "rss_kib": 98336,
+          "name": "leaf-reader"
+        },
+        {
+          "pid": 25274,
+          "parent": 1,
+          "rss_kib": 25968,
+          "name": "com.apple.WebKit.GPU"
+        },
+        {
+          "pid": 25275,
+          "parent": 1,
+          "rss_kib": 48080,
+          "name": "com.apple.WebKit.WebContent"
+        },
+        {
+          "pid": 25276,
+          "parent": 1,
+          "rss_kib": 8176,
+          "name": "com.apple.WebKit.Networking"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "startup_ms": 594.6,
+      "rss_mib": 176.9,
+      "footprint_mib": 86.3,
+      "processes": [
+        {
+          "pid": 25290,
+          "parent": 25188,
+          "rss_kib": 100544,
+          "name": "leaf-reader"
+        },
+        {
+          "pid": 25292,
+          "parent": 1,
+          "rss_kib": 24944,
+          "name": "com.apple.WebKit.GPU"
+        },
+        {
+          "pid": 25293,
+          "parent": 1,
+          "rss_kib": 47664,
+          "name": "com.apple.WebKit.WebContent"
+        },
+        {
+          "pid": 25294,
+          "parent": 1,
+          "rss_kib": 7968,
+          "name": "com.apple.WebKit.Networking"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "startup_ms": 478.3,
+      "rss_mib": 179.8,
+      "footprint_mib": 86.3,
+      "processes": [
+        {
+          "pid": 25307,
+          "parent": 25188,
+          "rss_kib": 100528,
+          "name": "leaf-reader"
+        },
+        {
+          "pid": 25309,
+          "parent": 1,
+          "rss_kib": 28016,
+          "name": "com.apple.WebKit.GPU"
+        },
+        {
+          "pid": 25310,
+          "parent": 1,
+          "rss_kib": 48144,
+          "name": "com.apple.WebKit.WebContent"
+        },
+        {
+          "pid": 25311,
+          "parent": 1,
+          "rss_kib": 7392,
+          "name": "com.apple.WebKit.Networking"
+        }
+      ]
+    },
+    {
+      "run": 4,
+      "startup_ms": 481.3,
+      "rss_mib": 181.8,
+      "footprint_mib": 86.4,
+      "processes": [
+        {
+          "pid": 25322,
+          "parent": 25188,
+          "rss_kib": 99616,
+          "name": "leaf-reader"
+        },
+        {
+          "pid": 25324,
+          "parent": 1,
+          "rss_kib": 28704,
+          "name": "com.apple.WebKit.GPU"
+        },
+        {
+          "pid": 25325,
+          "parent": 1,
+          "rss_kib": 49504,
+          "name": "com.apple.WebKit.WebContent"
+        },
+        {
+          "pid": 25326,
+          "parent": 1,
+          "rss_kib": 8288,
+          "name": "com.apple.WebKit.Networking"
+        }
+      ]
+    },
+    {
+      "run": 5,
+      "startup_ms": 520.0,
+      "rss_mib": 178.5,
+      "footprint_mib": 87.9,
+      "processes": [
+        {
+          "pid": 25346,
+          "parent": 25188,
+          "rss_kib": 100320,
+          "name": "leaf-reader"
+        },
+        {
+          "pid": 25350,
+          "parent": 1,
+          "rss_kib": 25184,
+          "name": "com.apple.WebKit.GPU"
+        },
+        {
+          "pid": 25351,
+          "parent": 1,
+          "rss_kib": 48880,
+          "name": "com.apple.WebKit.WebContent"
+        },
+        {
+          "pid": 25352,
+          "parent": 1,
+          "rss_kib": 8448,
+          "name": "com.apple.WebKit.Networking"
+        }
+      ]
+    }
+  ],
+  "median_startup_ms": 520.0,
+  "median_rss_mib": 178.5,
+  "median_footprint_mib": 86.3,
+  "notes": "Warm OS caches after first launch; startup through two animation frames + IPC. Includes newly launched WebKit XPC services by process delta. RSS double-counts shared pages; footprint is the macOS physical footprint sum. No concurrent WebKit app launches during sampling. Not a full-system cold boot.",
+  "artifact_sha256": "550301668c91a98ce77e9edf802c52ce261cacf721a3681e81267676c4b13aab"
+}

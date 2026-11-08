@@ -1,0 +1,57 @@
+# Leaf
+
+安静、轻巧的本地 EPUB 阅读器。Tauri 2 + Rust，界面使用 TypeScript 和按需引入的 Web Awesome；阅读正文由系统 WebView 排版。
+
+## 第一版功能
+
+- 打开或拖入本地 EPUB，最近阅读书架（最多 24 本）。原书保留在原路径，不自动复制进书库。
+- EPUB 2 NCX / EPUB 3 导航目录，章节、书内锚点和跨章节链接。
+- 滚动阅读；按书保存章节及章内位置，重新打开恢复。书籍路径变化时需重新选择。
+- 字号、行距、阅读宽度、衬线 / 无衬线字体和暖纸 / 素白 / 夜读主题。
+- 内置原创示例书，可直接体验。
+- `⌘/Ctrl+O` 打开，`←/→` 切章，空格 / PageDown / PageUp 滚动，Escape 关闭设置。
+
+## 开发和构建
+
+需要 Node.js 20.19+（或 22.12+）、Rust stable 和 [Tauri 平台依赖](https://v2.tauri.app/start/prerequisites/)。macOS 需要 Xcode Command Line Tools；Windows 需要 C++ Build Tools 和 WebView2；Linux 需要 WebKitGTK 等系统包。
+
+```sh
+npm ci
+npm run tauri -- dev
+npm run tauri -- build
+```
+
+macOS 的应用输出在 `src-tauri/target/release/bundle/macos/Leaf.app`。Windows / Linux 应在各自平台构建、验证。首次开发在这台 Mac 上安装了独立 Rust 工具链到 `~/Library/Caches/leaf-toolchain`，未修改 shell 配置；`scripts/tauri.mjs` 会在系统找不到 Cargo 时使用它。
+
+## 性能设计
+
+- 不捆绑 Chromium 或 Node.js 运行时，使用系统 WebView。
+- 无 React/Vue 应用运行时；只加载按钮组件，滑块和下拉框在首次打开设置时加载。
+- 启动只读取一个小型阅读记录文件，不扫描目录、解压书籍或生成封面。
+- 一次只持有一本书的 ZIP 索引和一个章节的 DOM。图片、CSS、字体经受限本地协议按需解压；切章销毁旧 DOM，返回书架关闭 ZIP 文件。
+- 不使用图片 base64、整书 Blob、永久资源缓存、后台索引或空闲定时轮询。
+- 阅读位置变动防抖写入，切章、返回书架和关闭窗口时等待保存。
+
+运行数据保存在 Tauri 的应用数据目录（macOS：`~/Library/Application Support/local.leaf.reader`），包括 `library.json` 和首次阅读时写入的示例 EPUB；排版设置在 WebView 本地存储。`LEAF_DATA_DIR` 可指定独立阅读记录目录，但不会改变 WebView 存储位置。已有用户实例时，QA 还应使用独立应用标识或 WebView 数据目录隔离存储。
+
+## 验证
+
+所有验证应在独立 checkout / 物理副本中进行，依赖、构建产物和数据都不能链接回在线服务。浏览器测试使用独立的 `127.0.0.1:1438`，开发端口是 `1437`；测试不会操作现有浏览器标签页。
+
+```sh
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+npm exec playwright -- install chromium webkit
+npm run test:ui
+npm exec playwright -- test --browser=webkit
+python3 scripts/benchmark.py /absolute/path/to/release/leaf-reader --runs 5 --output /tmp/leaf-benchmark.json
+```
+
+浏览器测试模拟桌面 IPC，覆盖目录、图片和样式、书内链接、进度恢复、设置持久化、控件键盘和恶意书籍内容隔离；它不能替代真实 Tauri / WebKit 验证。性能脚本启动发布二进制，等候两次动画帧后的就绪回执，记录主进程和新启动的 WebKit 辅助进程的 RSS 与物理内存；测量口径和实际验收见 `docs/verification.md`。
+
+## 当前范围
+
+第一版针对无 DRM 的、UTF-8 编码的流式 EPUB。未实现分页、批注、书签、全文搜索、同步及 DRM 解密。固定版式、竖排、复杂交互和混淆字体的完整还原尚未验收；混淆字体可退回系统字体。书架目前使用书名生成的封面。
+
+正文脚本、表单、嵌入页面和外部资源不会运行。解析过程使用惰性模板，去掉外部 URL，随后用 DOMPurify 清洗；正文在不允许同源访问的 sandbox iframe 内显示；CSP 只允许应用自带的 `reader-bridge.js` 处理事件，禁止书籍脚本，正文无法访问父页面 DOM 或 IPC。资源协议仅允许当前书籍的样式、图片和字体，禁止路径逃逸，不提供任意文件读取。元数据上限 4 MiB / 100,000 XML 节点，章节上限 8 MiB，单个资源上限 32 MiB，ZIP 最多 20,000 个条目；超限时明确报错。

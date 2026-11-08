@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Leaf",
+  "version": "0.1.0",
+  "identifier": "local.leaf.reader",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1437",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Leaf · 本地阅读",
+        "width": 1180,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 560,
+        "backgroundColor": "#f6f5f0"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' tauri://localhost/reader-bridge.js http://tauri.localhost/reader-bridge.js; style-src 'self' 'unsafe-inline' epub: http://epub.localhost; img-src 'self' data: epub: http://epub.localhost; font-src 'self' data: epub: http://epub.localhost; connect-src data: ipc: http://ipc.localhost; frame-src 'self'; object-src 'none'; base-uri 'self' epub: http://epub.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Education",
+    "shortDescription": "轻巧、安静的本地 EPUB 阅读器",
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
