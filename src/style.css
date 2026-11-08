@@ -1414,3 +1414,27 @@ select {
 .app-dialog wa-select {
   max-width: 100%;
 }
+
+#library-settings {
+  margin-bottom: 14px;
+}
+.library-directory-field {
+  margin-top: 22px;
+}
+.directory-path {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  max-height: 140px;
+  overflow: auto;
+  user-select: text;
+}
+.directory-actions {
+  display: flex;
+  gap: 10px;
+}

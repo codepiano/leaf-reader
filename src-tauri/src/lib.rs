@@ -1,5 +1,6 @@
 mod collection;
 mod epub;
+mod library_directory;
 use collection::{Candidate, Collection};
 use epub::{Book, Chapter, TocEntry};
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,7 @@ struct Recent {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct Library {
+    settings: library_directory::Settings,
     recent: Vec<Recent>,
     collections: HashMap<String, Collection>,
     metadata: HashMap<String, BookMeta>,
@@ -204,6 +206,14 @@ fn make_opened(
     })
 }
 fn open_scoped(state: &ReaderState, path: &Path, part_id: Option<&str>) -> Result<Opened, String> {
+    open_scoped_from(state, path, part_id, None)
+}
+fn open_scoped_from(
+    state: &ReaderState,
+    path: &Path,
+    part_id: Option<&str>,
+    origin: Option<&Path>,
+) -> Result<Opened, String> {
     let mut active = state.session.lock().map_err(|e| e.to_string())?;
     let canonical = path
         .canonicalize()
@@ -221,6 +231,39 @@ fn open_scoped(state: &ReaderState, path: &Path, part_id: Option<&str>) -> Resul
     let id = format!("{:x}", hash.finish());
     let mut library = state.library.lock().map_err(|e| e.to_string())?;
     let mut next = library.clone();
+    // An explicit import of a previously read file changes its location, not its reading identity.
+    if !next.recent.iter().any(|r| r.id == id) {
+        let original = origin
+            .and_then(|p| p.canonicalize().ok())
+            .map(|p| p.to_string_lossy().to_string());
+        if let Some(previous) = next
+            .recent
+            .iter()
+            .find(|r| Some(&r.path) == original.as_ref())
+            .cloned()
+        {
+            if let Some(record) = next.recent.iter_mut().find(|r| r.id == previous.id) {
+                record.id = id.clone();
+                record.path = path.clone();
+            }
+            if let Some(collection) = next.collections.remove(&previous.id) {
+                next.collections.insert(id.clone(), collection);
+            }
+            let prefix = format!("{}::", previous.id);
+            let keys: Vec<_> = next
+                .metadata
+                .keys()
+                .filter(|key| *key == &previous.id || key.starts_with(&prefix))
+                .cloned()
+                .collect();
+            for key in keys {
+                let suffix = &key[previous.id.len()..];
+                if let Some(meta) = next.metadata.remove(&key) {
+                    next.metadata.insert(format!("{id}{suffix}"), meta);
+                }
+            }
+        }
+    }
     let old = next.recent.iter().find(|r| r.id == id).cloned();
     next.recent.retain(|r| r.id != id);
     next.recent.insert(
@@ -269,12 +312,20 @@ async fn open_book(
     app: tauri::AppHandle,
     path: String,
     part_id: Option<String>,
+    import_file: Option<bool>,
 ) -> Result<Opened, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        open_scoped(
+        let origin = Path::new(&path);
+        let destination = library_directory::source(
             &app.state::<ReaderState>(),
-            Path::new(&path),
+            origin,
+            import_file.unwrap_or(false),
+        )?;
+        open_scoped_from(
+            &app.state::<ReaderState>(),
+            &destination,
             part_id.as_deref(),
+            Some(origin),
         )
     })
     .await
@@ -648,6 +699,8 @@ pub fn run() {
             close_book,
             frontend_ready,
             library_snapshot,
+            library_directory::library_settings,
+            library_directory::set_library_settings,
             set_collection,
             edit_metadata,
             manage_group

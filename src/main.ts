@@ -17,6 +17,7 @@ import {
 } from "./types";
 import { Shelf, type Filter } from "./shelf";
 import { TocTree } from "./toc";
+import { initLibrarySettings } from "./library-settings";
 
 type Settings = {
   size: number;
@@ -133,6 +134,7 @@ const shelf = new Shelf(
   showError,
   icon,
 );
+initLibrarySettings(showError);
 const tocTree = new TocTree($("#toc"));
 $("#collection-close").onclick = () =>
   $<HTMLDialogElement>("#collection-dialog").close();
@@ -346,14 +348,19 @@ function updatePosition() {
     loadingChapter || chapter >= book.chapters.length - 1;
   tocTree.active(chapter);
 }
-async function openPath(path?: string, demo = false, partId?: string) {
+async function openPath(
+  path?: string,
+  demo = false,
+  partId?: string,
+  importFile = false,
+) {
   if (busy || loadingChapter) return;
   setBusy(true);
   try {
     await flushProgress();
     const opened = await invoke<Book>(
       demo ? "open_demo" : "open_book",
-      demo ? {} : { path, partId: partId ?? null },
+      demo ? {} : { path, partId: partId ?? null, importFile },
     );
     await presentBook(opened);
   } catch (e) {
@@ -414,7 +421,7 @@ async function pickBook() {
       directory: false,
       filters: [{ name: "EPUB 电子书", extensions: ["epub"] }],
     });
-    if (typeof path === "string") await openPath(path);
+    if (typeof path === "string") await openPath(path, false, undefined, true);
   } catch (e) {
     showError(e);
   }
@@ -762,7 +769,7 @@ if (isTauri()) {
       const path = e.payload.paths.find((p) =>
         p.toLowerCase().endsWith(".epub"),
       );
-      if (path) void openPath(path);
+      if (path) void openPath(path, false, undefined, true);
       else showError("请拖入 .epub 文件。");
     }
   });

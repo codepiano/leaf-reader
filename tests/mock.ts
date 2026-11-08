@@ -103,12 +103,26 @@ export async function mockDesktop(
             `http://epub.localhost/${encodeURIComponent(path)}`,
           invoke: async (command: string, args: Record<string, any> = {}) => {
             const s = load();
+            if (command === "library_settings")
+              return s.settings || { directory: null, import_enabled: false };
+            if (command === "set_library_settings") {
+              if (args.directory === "/unavailable") throw "无法访问书库目录";
+              s.settings = {
+                directory: args.directory,
+                import_enabled: args.importEnabled,
+              };
+              save(s);
+              return s.settings;
+            }
             if (command === "library_snapshot") return s;
             if (command === "list_recent") return s.books;
             if (command === "open_demo")
               return opened(anthology ? "anthology" : "sample");
-            if (command === "plugin:dialog|open")
+            if (command === "plugin:dialog|open") {
+              if (args.options?.directory)
+                return localStorage.getItem("mock.directory") || null;
               return anthology ? "/anthology.epub" : "/sample.epub";
+            }
             if (command === "open_book")
               return opened(
                 args.path === "/anthology.epub" ? "anthology" : "sample",
