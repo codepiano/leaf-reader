@@ -1,3 +1,4 @@
+import { compareBooks, savedSort, validSort, sortLabels } from "./shelf-sort";
 import { initShelfSize } from "./shelf-size";
 import { Covers } from "./covers";
 import { showBookInfo } from "./book-info";
@@ -32,6 +33,8 @@ const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;
 export class Shelf {
   private covers = new Covers();
+  private sort = savedSort();
+  private sortReady: Promise<unknown> | undefined;
   data: Snapshot = { books: [], groups: [] };
   filter: Filter = { kind: "all" };
   query = "";
@@ -53,9 +56,20 @@ export class Shelf {
     );
     $(".shelf-heading").insertAdjacentHTML(
       "afterend",
-      '<div class="shelf-tools"><input id="shelf-search" class="field-input" type="search" aria-label="搜索书籍、作者和标签" placeholder="搜索书名、作者、标签…"><wa-button id="manage-groups" class="quiet-button" size="s">管理分组</wa-button></div><p id="filter-empty" class="filter-empty" hidden>这里还没有书籍。</p>',
+      '<div class="shelf-tools"><input id="shelf-search" class="field-input" type="search" aria-label="搜索书籍、作者和标签" placeholder="搜索书名、作者、标签…"><label class="shelf-sort">排序<wa-select id="shelf-sort" aria-label="书架排序" size="s"><wa-option value="recent">最近阅读时间</wa-option><wa-option value="title">书名</wa-option><wa-option value="author">作者</wa-option></wa-select></label><wa-button id="manage-groups" class="quiet-button" size="s">管理分组</wa-button></div><p id="filter-empty" class="filter-empty" hidden>这里还没有书籍。</p>',
     );
     initShelfSize();
+    $("#shelf-sort").addEventListener("change", () => {
+      const value = $<WaSelect>("#shelf-sort").value;
+      if (!validSort(value)) return;
+      this.sort = value;
+      try {
+        localStorage.setItem("leaf.shelf-sort", value);
+      } catch {
+        /* In-memory preference still works. */
+      }
+      this.renderCards();
+    });
     document.body.insertAdjacentHTML(
       "beforeend",
       `
@@ -169,6 +183,16 @@ export class Shelf {
   }
   render() {
     const all = this.items();
+    if (all.length && !this.sortReady) {
+      this.sortReady = Promise.all([
+        import("@awesome.me/webawesome/dist/components/select/select.js"),
+        import("@awesome.me/webawesome/dist/components/option/option.js"),
+      ])
+        .then(() => {
+          $<WaSelect>("#shelf-sort").value = this.sort;
+        })
+        .catch(this.error);
+    }
     $("#book-count").textContent = String(all.length);
     $("#favorite-count").textContent = String(
       all.filter((i) => i.metadata.favorite).length,
@@ -266,11 +290,7 @@ export class Shelf {
           .toLocaleLowerCase()
           .includes(q),
       );
-    list.sort(
-      (a, b) =>
-        Number(b.metadata.pinned) - Number(a.metadata.pinned) ||
-        b.opened - a.opened,
-    );
+    list.sort((a, b) => compareBooks(this.sort, a, b));
     const source = this.data.books.find((r) => r.id === this.filter.value);
     const title =
       this.filter.kind === "status"
@@ -289,9 +309,7 @@ export class Shelf {
     $(".shelf-heading h2").innerHTML =
       `${esc(title)} <span id="shelf-count">${list.length} 本</span>`;
     $(".shelf-heading>.muted").textContent =
-      this.filter.kind === "recent"
-        ? "置顶优先 · 最后打开时间"
-        : "置顶优先 · 最近阅读";
+      `置顶优先 · ${sortLabels[this.sort]}`;
     $("#empty").hidden = all.length > 0;
     $("#filter-empty").hidden = !all.length || list.length > 0;
     $(".shelf-tools").toggleAttribute("hidden", all.length === 0);
