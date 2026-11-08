@@ -85,7 +85,11 @@ export async function mockDesktop(
           else if (!r.collection.enabled) r.opened = Date.now();
         }
         view.collection = copy(r.collection);
-        view.progress = copy(p ? p.progress : r.progress);
+        view.progress =
+          s.settings?.remember_position === false
+            ? { chapter: 0, fraction: 0 }
+            : copy(p ? p.progress : r.progress);
+        view.track_reading_time = s.settings?.track_reading_time ?? true;
         view.part_id = partId;
         view.metadata = copy(
           partId ? r.part_metadata[partId] || meta() : r.metadata,
@@ -103,6 +107,16 @@ export async function mockDesktop(
             `http://epub.localhost/${encodeURIComponent(path)}`,
           invoke: async (command: string, args: Record<string, any> = {}) => {
             const s = load();
+            if (command === "save_reading_time") {
+              if (!active || active.token !== args.token) throw "书籍已关闭";
+              if (s.settings?.track_reading_time === false) return;
+              const key =
+                active.id + (active.part_id ? "::" + active.part_id : "");
+              s.reading_ms ||= {};
+              s.reading_ms[key] = (s.reading_ms[key] || 0) + args.milliseconds;
+              save(s);
+              return;
+            }
             if (command === "book_info") {
               const r = s.books.find((r: any) => r.id === args.sourceId);
               const part = args.partId
@@ -110,6 +124,15 @@ export async function mockDesktop(
                 : null;
               const missing = localStorage.getItem("mock.missing");
               return {
+                reading_ms: Object.entries(s.reading_ms || {})
+                  .filter(
+                    ([k]) =>
+                      k ===
+                        args.sourceId +
+                          (args.partId ? "::" + args.partId : "") ||
+                      (!args.partId && k.startsWith(args.sourceId + "::")),
+                  )
+                  .reduce((sum, [, v]) => sum + Number(v), 0),
                 title: part?.title || r.title,
                 author: r.author,
                 path: localStorage.getItem("mock.info-path") || r.path,
@@ -125,12 +148,21 @@ export async function mockDesktop(
               };
             }
             if (command === "library_settings")
-              return s.settings || { directory: null, import_enabled: false };
+              return (
+                s.settings || {
+                  directory: null,
+                  import_enabled: false,
+                  remember_position: true,
+                  track_reading_time: true,
+                }
+              );
             if (command === "set_library_settings") {
               if (args.directory === "/unavailable") throw "无法访问书库目录";
               s.settings = {
                 directory: args.directory,
                 import_enabled: args.importEnabled,
+                remember_position: args.rememberPosition ?? true,
+                track_reading_time: args.trackReadingTime ?? true,
               };
               save(s);
               return s.settings;
@@ -162,6 +194,7 @@ export async function mockDesktop(
               );
             }
             if (command === "save_progress") {
+              if (s.settings?.remember_position === false) return;
               const r = s.books.find((r: any) => r.id === active.id),
                 p = active.part_id
                   ? r.collection.parts.find((p: any) => p.id === active.part_id)

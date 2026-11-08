@@ -2,11 +2,19 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type WaButton from "@awesome.me/webawesome/dist/components/button/button.js";
 
-type Settings = { directory: string | null; import_enabled: boolean };
+type Settings = {
+  directory: string | null;
+  import_enabled: boolean;
+  remember_position: boolean;
+  track_reading_time: boolean;
+};
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 
-export function initLibrarySettings(reportError: (error: unknown) => void) {
+export function initLibrarySettings(
+  reportError: (error: unknown) => void,
+  beforeSave: () => Promise<unknown>,
+) {
   document
     .querySelector(".sidebar-bottom")!
     .insertAdjacentHTML(
@@ -15,7 +23,7 @@ export function initLibrarySettings(reportError: (error: unknown) => void) {
     );
   document.body.insertAdjacentHTML(
     "beforeend",
-    `<dialog id="library-settings-dialog" class="app-dialog"><div class="dialog-heading"><div><div class="eyebrow">本地书库</div><h2>书库设置</h2></div><wa-button id="library-settings-close" class="icon-button" size="s" aria-label="关闭书库设置">×</wa-button></div><p class="dialog-description">默认直接读取原文件。开启导入后，新打开或拖入的 EPUB 会复制到指定目录，并从副本阅读；原文件保持不变。</p><label class="check-label"><input id="library-import-enabled" type="checkbox">导入到书库</label><div class="form-field library-directory-field"><span>书库目录</span><p id="library-directory" class="directory-path"></p><div class="directory-actions"><wa-button id="library-directory-choose" class="quiet-button" size="s">选择目录</wa-button><wa-button id="library-directory-clear" class="quiet-button" size="s">清除目录</wa-button></div></div><p class="field-hint">设置目录不会扫描现有文件或搬迁书架。关闭导入后，已导入的书仍可阅读；书架中的书不会重复复制。</p><p id="library-settings-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="library-settings-cancel" class="quiet-button" size="s">取消</wa-button><wa-button id="library-settings-save" class="primary-button" size="s">保存</wa-button></div></dialog>`,
+    `<dialog id="library-settings-dialog" class="app-dialog"><div class="dialog-heading"><div><div class="eyebrow">本地书库</div><h2>书库设置</h2></div><wa-button id="library-settings-close" class="icon-button" size="s" aria-label="关闭书库设置">×</wa-button></div><p class="dialog-description">默认直接读取原文件。开启导入后，新打开或拖入的 EPUB 会复制到指定目录，并从副本阅读；原文件保持不变。</p><label class="check-label"><input id="library-import-enabled" type="checkbox">导入到书库</label><div class="form-field library-directory-field"><span>书库目录</span><p id="library-directory" class="directory-path"></p><div class="directory-actions"><wa-button id="library-directory-choose" class="quiet-button" size="s">选择目录</wa-button><wa-button id="library-directory-clear" class="quiet-button" size="s">清除目录</wa-button></div></div><p class="field-hint">设置目录不会扫描现有文件或搬迁书架。关闭导入后，已导入的书仍可阅读；书架中的书不会重复复制。</p><div class="reading-preferences"><label class="check-label"><input id="remember-position" type="checkbox">记住上次阅读位置</label><label class="check-label"><input id="track-reading-time" type="checkbox">记录阅读时长</label><p class="field-hint">关闭后停止保存位置或累计时长，已有记录保留。重新打开时，关闭记忆则从头开始。时长只统计前台、有焦点的阅读时间。</p></div><p id="library-settings-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="library-settings-cancel" class="quiet-button" size="s">取消</wa-button><wa-button id="library-settings-save" class="primary-button" size="s">保存</wa-button></div></dialog>`,
   );
   const dialog = $<HTMLDialogElement>("#library-settings-dialog");
   const checkbox = $<HTMLInputElement>("#library-import-enabled");
@@ -37,12 +45,18 @@ export function initLibrarySettings(reportError: (error: unknown) => void) {
     ])
       $<WaButton>(`#${id}`).disabled = busy;
     checkbox.disabled = busy;
+    $<HTMLInputElement>("#remember-position").disabled = busy;
+    $<HTMLInputElement>("#track-reading-time").disabled = busy;
   };
   $("#library-settings").onclick = async () => {
     try {
       const settings = await invoke<Settings>("library_settings");
       directory = settings.directory;
       checkbox.checked = settings.import_enabled;
+      $<HTMLInputElement>("#remember-position").checked =
+        settings.remember_position ?? true;
+      $<HTMLInputElement>("#track-reading-time").checked =
+        settings.track_reading_time ?? true;
       $("#library-settings-error").hidden = true;
       render();
       dialog.showModal();
@@ -84,11 +98,17 @@ export function initLibrarySettings(reportError: (error: unknown) => void) {
     render();
     $("#library-settings-error").hidden = true;
     try {
-      await invoke("set_library_settings", {
+      await beforeSave();
+      const saved = await invoke<Settings>("set_library_settings", {
         directory,
         importEnabled: checkbox.checked,
+        rememberPosition: $<HTMLInputElement>("#remember-position").checked,
+        trackReadingTime: $<HTMLInputElement>("#track-reading-time").checked,
       });
       dialog.close();
+      window.dispatchEvent(
+        new CustomEvent("leaf-preferences", { detail: saved }),
+      );
     } catch (e) {
       error(e);
     } finally {

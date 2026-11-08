@@ -1,23 +1,53 @@
 use super::*;
 use std::io::{Read, Write};
 
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub directory: Option<String>,
     pub import_enabled: bool,
+    pub remember_position: bool,
+    pub track_reading_time: bool,
 }
 
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            directory: None,
+            import_enabled: false,
+            remember_position: true,
+            track_reading_time: true,
+        }
+    }
+}
+#[cfg(test)]
 pub fn configure(
     state: &ReaderState,
     directory: Option<String>,
     enabled: bool,
 ) -> Result<Settings, String> {
+    configure_settings(state, directory, enabled, None, None)
+}
+pub fn configure_settings(
+    state: &ReaderState,
+    directory: Option<String>,
+    enabled: bool,
+    remember_position: Option<bool>,
+    track_reading_time: Option<bool>,
+) -> Result<Settings, String> {
+    let previous = state
+        .library
+        .lock()
+        .map_err(|e| e.to_string())?
+        .settings
+        .clone();
     let directory = directory
         .map(|p| -> Result<String, String> {
-            let path = Path::new(&p)
-                .canonicalize()
-                .map_err(|e| format!("无法访问书库目录：{e}"))?;
+            let path = match Path::new(&p).canonicalize() {
+                Ok(path) => path,
+                Err(_) if previous.directory.as_deref() == Some(&p) => return Ok(p),
+                Err(e) => return Err(format!("无法访问书库目录：{e}")),
+            };
             if !path.is_dir() {
                 return Err("请选择文件夹作为书库目录".into());
             }
@@ -32,6 +62,8 @@ pub fn configure(
     next.settings = Settings {
         directory,
         import_enabled: enabled,
+        remember_position: remember_position.unwrap_or(next.settings.remember_position),
+        track_reading_time: track_reading_time.unwrap_or(next.settings.track_reading_time),
     };
     persist(state, &next)?;
     *library = next;
@@ -142,9 +174,17 @@ pub async fn set_library_settings(
     app: tauri::AppHandle,
     directory: Option<String>,
     import_enabled: bool,
+    remember_position: Option<bool>,
+    track_reading_time: Option<bool>,
 ) -> Result<Settings, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        configure(&app.state::<ReaderState>(), directory, import_enabled)
+        configure_settings(
+            &app.state::<ReaderState>(),
+            directory,
+            import_enabled,
+            remember_position,
+            track_reading_time,
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -214,8 +254,11 @@ mod tests {
         fs::write(&bad, b"bad").unwrap();
         assert!(source(&state, &bad, true).is_err());
         assert!(!books.join("bad.epub").exists());
+        let configured = state.library.lock().unwrap().settings.directory.clone();
         fs::remove_dir_all(&books).unwrap();
         assert!(source(&state, &file, true).is_err());
+        configure_settings(&state, configured, true, Some(false), Some(false)).unwrap();
+        assert!(!state.library.lock().unwrap().settings.track_reading_time);
         configure(&state, None, false).unwrap();
         assert_eq!(source(&state, &file, true).unwrap(), file);
         fs::remove_dir_all(dir).unwrap();

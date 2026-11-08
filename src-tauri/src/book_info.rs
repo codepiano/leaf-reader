@@ -3,6 +3,7 @@ use super::*;
 #[derive(Serialize)]
 pub struct Info {
     title: String,
+    reading_ms: u64,
     author: String,
     path: String,
     size: Option<u64>,
@@ -38,6 +39,13 @@ pub fn info(state: &ReaderState, source_id: &str, part_id: Option<&str>) -> Resu
         .get(&item_key(source_id, part_id))
         .cloned()
         .unwrap_or_default();
+    let key = item_key(source_id, part_id);
+    let prefix = format!("{source_id}::");
+    let reading_ms = library
+        .reading_ms
+        .iter()
+        .filter(|(k, _)| *k == &key || (part_id.is_none() && k.starts_with(&prefix)))
+        .fold(0u64, |total, (_, value)| total.saturating_add(*value));
     drop(library);
     let (size, modified, file_error) = match fs::metadata(&book.path) {
         Ok(m) if m.is_file() => (
@@ -52,6 +60,7 @@ pub fn info(state: &ReaderState, source_id: &str, part_id: Option<&str>) -> Resu
         Err(e) => (None, None, Some(format!("文件已移动或无法访问：{e}"))),
     };
     Ok(Info {
+        reading_ms,
         title: part
             .as_ref()
             .map(|p| p.title.clone())

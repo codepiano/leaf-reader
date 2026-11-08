@@ -2,6 +2,7 @@ mod book_info;
 mod collection;
 mod epub;
 mod library_directory;
+mod reading_time;
 use collection::{Candidate, Collection};
 use epub::{Book, Chapter, TocEntry};
 use serde::{Deserialize, Serialize};
@@ -41,6 +42,7 @@ struct Recent {
 #[serde(default)]
 struct Library {
     settings: library_directory::Settings,
+    reading_ms: HashMap<String, u64>,
     recent: Vec<Recent>,
     collections: HashMap<String, Collection>,
     metadata: HashMap<String, BookMeta>,
@@ -60,6 +62,7 @@ struct ReaderState {
 }
 #[derive(Serialize)]
 struct Opened {
+    track_reading_time: bool,
     token: String,
     id: String,
     path: String,
@@ -175,6 +178,9 @@ fn make_opened(
     let mut progress = part
         .map(|p| p.progress.clone())
         .unwrap_or_else(|| recent.progress.clone());
+    if !library.settings.remember_position {
+        progress = Progress::default();
+    }
     progress.chapter = progress.chapter.min(chapters.len() - 1);
     progress.fraction = if progress.fraction.is_finite() {
         progress.fraction.clamp(0., 1.)
@@ -185,6 +191,7 @@ fn make_opened(
     session.part_id = part_id.map(str::to_string);
     session.token = token();
     Ok(Opened {
+        track_reading_time: library.settings.track_reading_time,
         token: session.token.clone(),
         id: session.id.clone(),
         path: recent.path.clone(),
@@ -257,6 +264,18 @@ fn open_scoped_from(
                 .filter(|key| *key == &previous.id || key.starts_with(&prefix))
                 .cloned()
                 .collect();
+            let time_keys: Vec<_> = next
+                .reading_ms
+                .keys()
+                .filter(|key| *key == &previous.id || key.starts_with(&prefix))
+                .cloned()
+                .collect();
+            for key in time_keys {
+                if let Some(value) = next.reading_ms.remove(&key) {
+                    next.reading_ms
+                        .insert(format!("{id}{}", &key[previous.id.len()..]), value);
+                }
+            }
             for key in keys {
                 let suffix = &key[previous.id.len()..];
                 if let Some(meta) = next.metadata.remove(&key) {
@@ -434,6 +453,9 @@ fn write_progress(
         return Err("无效的阅读位置".into());
     }
     let mut library = state.library.lock().map_err(|e| e.to_string())?;
+    if !library.settings.remember_position {
+        return Ok(());
+    }
     let mut next = library.clone();
     let progress = Progress {
         chapter,
@@ -701,6 +723,7 @@ pub fn run() {
             frontend_ready,
             library_snapshot,
             book_info::book_info,
+            reading_time::save_reading_time,
             library_directory::library_settings,
             library_directory::set_library_settings,
             set_collection,

@@ -12,7 +12,9 @@ test("library import is opt-in, directory picker can cancel, settings persist an
   await expect(enabled).not.toBeChecked();
   await expect(page.locator("#library-directory")).toHaveText("尚未设置目录");
   await enabled.check();
-  await expect(page.locator("#library-settings-save").getByRole("button")).toBeDisabled();
+  await expect(
+    page.locator("#library-settings-save").getByRole("button"),
+  ).toBeDisabled();
   await page.locator("#library-directory-choose").click();
   await expect(page.locator("#library-directory")).toHaveText("尚未设置目录");
   const directory =
@@ -55,7 +57,9 @@ test("library import is opt-in, directory picker can cancel, settings persist an
   await expect(page.locator("#library-directory")).toHaveText(directory);
   await page.locator("#library-directory-clear").click();
   await expect(enabled).not.toBeChecked();
-  await expect(page.locator("#library-directory-clear").getByRole("button")).toBeDisabled();
+  await expect(
+    page.locator("#library-directory-clear").getByRole("button"),
+  ).toBeDisabled();
   await page.screenshot({ path: "test-results/library-settings-disabled.png" });
   await page.locator("#library-settings-save").click();
   await page.locator("#library-settings").click();

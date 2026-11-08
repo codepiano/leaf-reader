@@ -33,6 +33,7 @@ export type Candidate = {
 };
 export type Book = {
   token: string;
+  track_reading_time?: boolean;
   id: string;
   path: string;
   title: string;

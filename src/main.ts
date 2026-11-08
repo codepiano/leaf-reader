@@ -17,6 +17,7 @@ import {
 } from "./types";
 import { Shelf, type Filter } from "./shelf";
 import { TocTree } from "./toc";
+import { ReadingClock } from "./reading-clock";
 import { initBookInfo, showBookInfo } from "./book-info";
 import { initLibrarySettings } from "./library-settings";
 
@@ -135,8 +136,27 @@ const shelf = new Shelf(
   showError,
   icon,
 );
-initLibrarySettings(showError);
-initBookInfo();
+const readingClock = new ReadingClock();
+setInterval(() => readingClock.sample(), 1000);
+setInterval(() => {
+  void readingClock.flush().catch(showError);
+}, 15000);
+for (const event of ["focus", "blur"])
+  window.addEventListener(event, () => {
+    readingClock.sample();
+    void readingClock.flush().catch(showError);
+  });
+document.addEventListener("visibilitychange", () => {
+  readingClock.sample();
+  void readingClock.flush().catch(showError);
+});
+window.addEventListener("leaf-preferences", (event) => {
+  const enabled = (event as CustomEvent).detail.track_reading_time;
+  if (book) book.track_reading_time = enabled;
+  readingClock.preference(enabled);
+});
+initLibrarySettings(showError, () => flushProgress());
+initBookInfo(() => readingClock.flush());
 $("#book-info").onclick = () => {
   if (book) void showBookInfo(book.id, book.part_id);
 };
@@ -195,6 +215,7 @@ async function configureCollection(enabled: boolean) {
   $<WaButton>("#collection-apply").disabled = true;
   $<WaButton>("#collection-disable").disabled = true;
   try {
+    readingClock.pause();
     await flushProgress();
     const opened = await invoke<Book>("set_collection", {
       token: book.token,
@@ -208,6 +229,8 @@ async function configureCollection(enabled: boolean) {
     $("#collection-error").hidden = false;
   } finally {
     setBusy(false);
+    if (book && readerReady)
+      readingClock.resume(book.token, book.track_reading_time ?? true);
     $<WaButton>("#collection-apply").disabled = false;
     $<WaButton>("#collection-disable").disabled = false;
   }
@@ -250,6 +273,7 @@ function readPosition(): Promise<number> {
   });
 }
 function clearReader() {
+  readingClock.pause();
   readerReady = false;
   if (handshake) {
     clearTimeout(handshake.timer);
@@ -265,12 +289,14 @@ function clearReader() {
 }
 function flushProgress() {
   clearTimeout(scrollTimer);
-  if (!book || loadingChapter || !readerReady) return saveChain;
+  if (!book || loadingChapter || !readerReady)
+    return Promise.all([saveChain, readingClock.flush()]);
   const token = book.token;
   const index = chapter;
   saveChain = saveChain
     .catch(() => {})
     .then(async () => {
+      await readingClock.flush();
       const value = await readPosition();
       await invoke("save_progress", { token, chapter: index, fraction: value });
     });
@@ -292,6 +318,7 @@ window.addEventListener("message", (e) => {
     });
   else if (m.type === "initialized" && handshake) {
     readerReady = true;
+    readingClock.resume(book.token, book.track_reading_time ?? true);
     clearTimeout(handshake.timer);
     handshake.resolve();
     handshake = undefined;
@@ -362,6 +389,7 @@ async function openPath(
   if (busy || loadingChapter) return;
   setBusy(true);
   try {
+    readingClock.pause();
     await flushProgress();
     const opened = await invoke<Book>(
       demo ? "open_demo" : "open_book",
@@ -372,6 +400,8 @@ async function openPath(
     showError(e);
   } finally {
     setBusy(false);
+    if (book && readerReady)
+      readingClock.resume(book.token, book.track_reading_time ?? true);
   }
 }
 async function presentBook(opened: Book) {
@@ -601,6 +631,7 @@ async function navigate(index: number, targetFraction = 0, fragment = "") {
 async function libraryView(filter: Filter = { kind: "all" }) {
   if (busy || loadingChapter) return;
   try {
+    readingClock.pause();
     await flushProgress();
     ++revision;
     clearReader();
@@ -786,6 +817,7 @@ if (isTauri()) {
     if (closing) return;
     closing = true;
     try {
+      readingClock.pause();
       await flushProgress();
       await win.destroy();
     } catch (err) {
