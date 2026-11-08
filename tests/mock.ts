@@ -103,6 +103,27 @@ export async function mockDesktop(
             `http://epub.localhost/${encodeURIComponent(path)}`,
           invoke: async (command: string, args: Record<string, any> = {}) => {
             const s = load();
+            if (command === "book_info") {
+              const r = s.books.find((r: any) => r.id === args.sourceId);
+              const part = args.partId
+                ? r.collection.parts.find((p: any) => p.id === args.partId)
+                : null;
+              const missing = localStorage.getItem("mock.missing");
+              return {
+                title: part?.title || r.title,
+                author: r.author,
+                path: localStorage.getItem("mock.info-path") || r.path,
+                size: missing ? null : 2030,
+                modified: missing ? null : 1794153600000,
+                chapters: part?.chapters || r.chapters,
+                source_chapters: r.chapters,
+                source_title: part ? r.title : null,
+                metadata: part
+                  ? r.part_metadata[part.id] || meta()
+                  : r.metadata,
+                file_error: missing ? "文件已移动或无法访问" : null,
+              };
+            }
             if (command === "library_settings")
               return s.settings || { directory: null, import_enabled: false };
             if (command === "set_library_settings") {

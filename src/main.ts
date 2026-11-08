@@ -17,6 +17,7 @@ import {
 } from "./types";
 import { Shelf, type Filter } from "./shelf";
 import { TocTree } from "./toc";
+import { initBookInfo, showBookInfo } from "./book-info";
 import { initLibrarySettings } from "./library-settings";
 
 type Settings = {
@@ -112,7 +113,7 @@ $("#app").innerHTML = `
     <div class="sidebar-bottom"><div class="local-badge"><span></span>本地存储 · 离线可用</div><p>给阅读，留一点空间。</p><span class="version">LEAF READER / 0.1</span></div>
   </aside>
   <main>
-    <header class="topbar"><div id="breadcrumb">书架 <span>/</span> 全部书籍</div><div class="top-actions"><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开 EPUB</wa-button></div></header>
+    <header class="topbar"><div id="breadcrumb">书架 <span>/</span> 全部书籍</div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开 EPUB</wa-button></div></header>
     <section id="library-view" class="library-view">
       <div class="library-heading"><div><div class="eyebrow">A LITTLE SPACE FOR READING</div><h1>把时间，留给好书<span>。</span></h1><p>从一页开始，走进另一个世界。</p></div><span class="heading-note">少一点喧嚣<br>多一点阅读</span></div>
       <div class="shelf-heading"><h2>我的书架 <span id="shelf-count">0 本</span></h2><span class="muted">最近阅读</span></div>
@@ -135,6 +136,10 @@ const shelf = new Shelf(
   icon,
 );
 initLibrarySettings(showError);
+initBookInfo();
+$("#book-info").onclick = () => {
+  if (book) void showBookInfo(book.id, book.part_id);
+};
 const tocTree = new TocTree($("#toc"));
 $("#collection-close").onclick = () =>
   $<HTMLDialogElement>("#collection-dialog").close();
@@ -372,6 +377,7 @@ async function openPath(
 async function presentBook(opened: Book) {
   clearReader();
   book = opened;
+  $("#book-info").hidden = false;
   chapter = opened.progress.chapter;
   fraction = opened.progress.fraction;
   // New fields have defaults here so older UI fixtures and saved sessions degrade gracefully.
@@ -599,6 +605,7 @@ async function libraryView(filter: Filter = { kind: "all" }) {
     ++revision;
     clearReader();
     book = null;
+    $("#book-info").hidden = true;
     $<HTMLIFrameElement>("#reader").srcdoc = "";
     await invoke("close_book");
     $("#reader-view").hidden = true;

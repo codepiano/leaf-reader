@@ -1,3 +1,4 @@
+mod book_info;
 mod collection;
 mod epub;
 mod library_directory;
@@ -699,6 +700,7 @@ pub fn run() {
             close_book,
             frontend_ready,
             library_snapshot,
+            book_info::book_info,
             library_directory::library_settings,
             library_directory::set_library_settings,
             set_collection,
