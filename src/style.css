@@ -1249,6 +1249,12 @@ select {
   cursor: pointer;
 }
 .dialog-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--card);
+  padding-block: 12px;
+  margin-bottom: -12px;
   display: flex;
   align-items: center;
   justify-content: flex-end;

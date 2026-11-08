@@ -35,6 +35,12 @@ test("library import is opt-in, directory picker can cancel, settings persist an
   await enabled.check();
   await page.setViewportSize({ width: 900, height: 700 });
   await page.locator("#library-directory-choose").focus();
+  const footer = await page.locator("#library-settings-save").evaluate((el) => {
+    const button = el.getBoundingClientRect();
+    const dialog = el.closest("dialog")!.getBoundingClientRect();
+    return { bottom: button.bottom, limit: dialog.bottom };
+  });
+  expect(footer.bottom).toBeLessThanOrEqual(footer.limit);
   await page.screenshot({ path: "test-results/library-settings.png" });
   expect(
     await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
