@@ -314,6 +314,36 @@ export async function mockDesktop(
     { catalog, files, malicious, broken, anthology, both },
   );
   await page.route("http://epub.localhost/**", async (route) => {
+    const coverPath = new URL(route.request().url()).pathname;
+    if (coverPath.startsWith("/cover/")) {
+      const mode = await page.evaluate(
+        () => localStorage.getItem("mock.cover") || "none",
+      );
+      if (mode === "slow")
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (mode === "broken") {
+        await route.fulfill({ body: "broken", contentType: "image/png" });
+        return;
+      }
+      if (mode === "none" || coverPath.endsWith("/anthology")) {
+        await route.fulfill({ status: 404, body: "" });
+        return;
+      }
+      const body = execFileSync(
+        "python3",
+        [
+          "-c",
+          "import zipfile;print(zipfile.ZipFile('fixtures/embedded-cover.epub').read('OPS/cover.svg').decode())",
+        ],
+        { encoding: "utf8" },
+      );
+      await route.fulfill({
+        body,
+        contentType: "image/svg+xml",
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
+      return;
+    }
     const path = new URL(route.request().url()).pathname
       .split("/")
       .slice(2)

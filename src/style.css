@@ -1507,3 +1507,23 @@ select {
   padding-left: 20px;
   overflow-wrap: anywhere;
 }
+
+.embedded-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  pointer-events: none;
+}
+.has-embedded-cover {
+  background: #eeeae1;
+}
+.has-embedded-cover .embedded-cover {
+  opacity: 1;
+}
+.has-embedded-cover .cover-frame,
+.has-embedded-cover .cover-spine {
+  visibility: hidden;
+}

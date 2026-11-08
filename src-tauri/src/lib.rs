@@ -1,5 +1,6 @@
 mod book_info;
 mod collection;
+mod cover;
 mod epub;
 mod library_directory;
 mod reading_time;
@@ -651,6 +652,9 @@ fn resource(app: &tauri::AppHandle, url: &str) -> Result<(Vec<u8>, &'static str)
         return Err("无效的路径".into());
     }
     let state = app.state::<ReaderState>();
+    if token == "cover" {
+        return cover::resource(&state, path);
+    }
     let mut active = state.session.lock().map_err(|e| e.to_string())?;
     let session = active
         .as_mut()
@@ -721,7 +725,14 @@ pub fn run() {
                             "Content-Security-Policy",
                             "default-src 'none'; style-src 'unsafe-inline'",
                         )
-                        .header("Cache-Control", "no-store")
+                        .header(
+                            "Cache-Control",
+                            if request.uri().path().starts_with("/cover/") {
+                                "private, max-age=300"
+                            } else {
+                                "no-store"
+                            },
+                        )
                         .body(bytes)
                         .unwrap(),
                 );
