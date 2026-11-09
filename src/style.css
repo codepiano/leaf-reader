@@ -1675,3 +1675,34 @@ select {
 .candidate-tree ul ul ul ul ul ul {
   padding-left: 0;
 }
+
+.collection-picker-tools {
+  position: sticky;
+  top: -7px;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px;
+  margin-bottom: 4px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.collection-current-layer {
+  flex: 1;
+  min-width: 100px;
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collection-bulk-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+}
+.collection-bulk-actions wa-button::part(button) {
+  font-size: 11px;
+}
