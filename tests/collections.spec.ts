@@ -3,9 +3,9 @@ import { mockDesktop } from "./mock";
 
 async function convert(page: import("@playwright/test").Page) {
   await page.locator("#collection-mode").click();
-  await expect(
-    page.locator("#collection-candidates input:checked"),
-  ).toHaveCount(3);
+  await expect(page.locator("#collection-selection")).toHaveText(
+    "已选择 3 本子书",
+  );
   await page.locator("#collection-apply").click();
   await expect(page.locator("#collection-dialog")).toBeHidden();
   await expect(page.locator(".book-card")).toHaveCount(4);
@@ -30,6 +30,9 @@ test("unlinked tree headings collapse, logical books clip shared files, progress
   await page.locator("#collection-mode").click();
   await expect(page.locator("#collection-dialog")).toBeVisible();
   await page.screenshot({ path: "test-results/collection-dialog.png" });
+  await page
+    .getByRole("button", { name: "展开 三册随笔合集", exact: true })
+    .click();
   await page
     .locator("#collection-candidates input:checked")
     .evaluateAll((inputs) =>
@@ -123,7 +126,9 @@ test("groups, tags, favorites, search and recent reading persist without changin
   await page.locator("#metadata-group").evaluate(async (el: any) => {
     await el.hide();
   });
-  await expect(page.locator("#metadata-group").getByRole("listbox")).toBeHidden();
+  await expect(
+    page.locator("#metadata-group").getByRole("listbox"),
+  ).toBeHidden();
   await page.screenshot({ path: "test-results/metadata-long-group-focus.png" });
   await page.locator("#metadata-group").evaluate(async (el: any) => {
     await el.show();
@@ -132,7 +137,9 @@ test("groups, tags, favorites, search and recent reading persist without changin
   await page.locator("#metadata-group").evaluate(async (el: any) => {
     await el.hide();
   });
-  await expect(page.locator("#metadata-group").getByRole("listbox")).toBeHidden();
+  await expect(
+    page.locator("#metadata-group").getByRole("listbox"),
+  ).toBeHidden();
   const geometry = await page.locator("#metadata-group").evaluate((el: any) => {
     const v = el.shadowRoot
         .querySelector('[part="display-input"]')
@@ -197,6 +204,12 @@ test("logical children can be favorited independently and invalid mixed-level co
   await expect(page.locator(".favorite-button.is-favorite")).toHaveCount(1);
   await page.locator('.book-card[aria-label="继续阅读 第一本：窗边"]').click();
   await page.locator("#collection-mode").click();
+  await page
+    .getByRole("button", { name: "展开 三册随笔合集", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "展开 第一本：窗边", exact: true })
+    .click();
   await page.locator('#collection-candidates input[value="toc-0-0-0"]').check();
   await page.locator("#collection-apply").click();
   await expect(page.locator("#collection-error")).toContainText("不能同时选择");

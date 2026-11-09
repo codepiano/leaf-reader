@@ -1269,7 +1269,7 @@ select {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 8px 10px calc(8px + min(var(--depth), 6) * 13px);
+  padding: 10px 8px;
   cursor: pointer;
 }
 .collection-candidate:hover {
@@ -1619,4 +1619,59 @@ select {
 }
 .book-description p {
   white-space: pre-wrap;
+}
+
+.candidate-tree,
+.candidate-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.candidate-tree ul {
+  padding-left: 20px;
+}
+.candidate-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.candidate-row .collection-candidate {
+  flex: 1;
+  min-width: 0;
+}
+.candidate-toggle,
+.candidate-spacer {
+  flex: 0 0 28px;
+  width: 28px;
+}
+.candidate-toggle {
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  padding: 0;
+  cursor: pointer;
+}
+.candidate-toggle[aria-expanded="true"] {
+  transform: rotate(90deg);
+}
+.candidate-toggle:hover {
+  background: var(--hover);
+  border-radius: 4px;
+}
+.candidate-toggle:focus-visible {
+  outline: 2px solid var(--wa-color-focus);
+  outline-offset: 0;
+  border-radius: 4px;
+}
+.candidate-selection-count {
+  color: var(--muted);
+  font-size: 9px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+.candidate-tree ul ul ul ul ul ul {
+  padding-left: 0;
 }
