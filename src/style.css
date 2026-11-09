@@ -1774,3 +1774,7 @@ select {
   color: #865c43;
   background: #f4eadd;
 }
+
+.remove-book-button { margin-right: auto; }
+wa-button.remove-book-button::part(button) { color: #945348; }
+wa-button.danger-button::part(button) { background: #945348; border-color: #945348; }

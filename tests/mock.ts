@@ -111,6 +111,11 @@ export async function mockDesktop(
       ) => {
         const s = load(),
           r = ensure(s, id);
+        s.hidden_books = (s.hidden_books || []).filter(
+          (key: string) =>
+            key !== id &&
+            (partId ? key !== id + "::" + partId : !key.startsWith(id + "::")),
+        );
         let view = root(id);
         if (r.collection.enabled && !partId) view = copy(catalog.collection);
         if (partId) {
@@ -161,6 +166,20 @@ export async function mockDesktop(
               command,
               args: copy(args),
             });
+            if (command === "remove_book") {
+              const delay = Number(
+                localStorage.getItem("mock.remove_delay") || 0,
+              );
+              if (delay)
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              if (localStorage.getItem("mock.remove_failure"))
+                throw "保存阅读记录失败";
+              const key =
+                args.sourceId + (args.partId ? "::" + args.partId : "");
+              s.hidden_books = [...new Set([...(s.hidden_books || []), key])];
+              save(s);
+              return;
+            }
             if (command === "scan_directories") return s.scan_directories || [];
             if (command === "set_scan_directories") {
               if (args.directories.includes("/unavailable"))
@@ -191,8 +210,15 @@ export async function mockDesktop(
                 found: s.scan_directories?.length ? 2 : 0,
                 added: s.books.length - before,
                 existing: before,
+                excluded: (s.hidden_books || []).filter(
+                  (key: string) => !key.includes("::"),
+                ).length,
                 updated: 0,
-                missing: s.books.filter((book: any) => !book.available).length,
+                missing: s.books.filter(
+                  (book: any) =>
+                    !book.available &&
+                    !(s.hidden_books || []).includes(book.id),
+                ).length,
                 failed: failed ? 1 : 0,
                 errors: failed
                   ? ["/sources/broken.epub：文件不是有效的 EPUB"]
@@ -276,6 +302,14 @@ export async function mockDesktop(
             }
             if (command === "library_snapshot") {
               const snapshot = copy(s);
+              snapshot.books = snapshot.books.filter(
+                (book: any) => !(s.hidden_books || []).includes(book.id),
+              );
+              for (const book of snapshot.books)
+                book.collection.parts = book.collection.parts.filter(
+                  (part: any) =>
+                    !(s.hidden_books || []).includes(book.id + "::" + part.id),
+                );
               for (const r of snapshot.books) {
                 const original = s.books.find((b: any) => b.id === r.id),
                   info = resolved(original).effective;

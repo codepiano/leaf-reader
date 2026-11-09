@@ -6,6 +6,7 @@ mod epub;
 mod library_directory;
 mod reading_time;
 mod scan;
+mod shelf_remove;
 use collection::{Candidate, Collection};
 use epub::{Book, Chapter, TocEntry};
 use serde::{Deserialize, Serialize};
@@ -68,6 +69,7 @@ struct Library {
     reading_ms: HashMap<String, u64>,
     scan_directories: Vec<String>,
     import_sources: HashMap<String, String>,
+    hidden_books: HashSet<String>,
     recent: Vec<Recent>,
     collections: HashMap<String, Collection>,
     metadata: HashMap<String, BookMeta>,
@@ -147,11 +149,17 @@ fn snapshot(library: &Library) -> Snapshot {
         books: library
             .recent
             .iter()
+            .filter(|r| !library.hidden_books.contains(&r.id))
             .map(|r| {
                 let mut recent = r.clone();
                 (recent.title, recent.author) =
                     details::names(library, &r.id, None, &r.title, &r.author);
                 let mut collection = library.collections.get(&r.id).cloned().unwrap_or_default();
+                collection.parts.retain(|part| {
+                    !library
+                        .hidden_books
+                        .contains(&item_key(&r.id, Some(&part.id)))
+                });
                 for part in &mut collection.parts {
                     part.title =
                         details::names(library, &r.id, Some(&part.id), &part.title, &r.author).0;
@@ -304,13 +312,22 @@ fn open_scoped_from(
         if let Some(previous) = next
             .recent
             .iter()
-            .find(|r| Some(&r.path) == original.as_ref())
+            .find(|r| {
+                Some(&r.path) == original.as_ref()
+                    || original
+                        .as_ref()
+                        .and_then(|source| next.import_sources.get(source))
+                        .is_some_and(|alias| alias == &r.id && next.hidden_books.contains(&r.id))
+            })
             .cloned()
         {
             if let Some(record) = next.recent.iter_mut().find(|r| r.id == previous.id) {
                 record.id = id.clone();
                 record.path = path.clone();
             }
+            // Retain both original and prior imported paths when restoring at another location.
+            next.import_sources
+                .insert(previous.path.clone(), id.clone());
             if let Some(collection) = next.collections.remove(&previous.id) {
                 next.collections.insert(id.clone(), collection);
             }
@@ -320,6 +337,17 @@ fn open_scoped_from(
                 }
             }
             let prefix = format!("{}::", previous.id);
+            next.hidden_books = next
+                .hidden_books
+                .iter()
+                .map(|key| {
+                    if key == &previous.id || key.starts_with(&prefix) {
+                        format!("{id}{}", &key[previous.id.len()..])
+                    } else {
+                        key.clone()
+                    }
+                })
+                .collect();
             let keys: Vec<_> = next
                 .metadata
                 .keys()
@@ -351,6 +379,14 @@ fn open_scoped_from(
             next.import_sources
                 .insert(original.to_string_lossy().to_string(), id.clone());
         }
+    }
+    // Only a successful, explicit open restores removed entries; scans never clear exclusions.
+    next.hidden_books.remove(&id);
+    if let Some(part) = part_id {
+        next.hidden_books.remove(&item_key(&id, Some(part)));
+    } else {
+        let prefix = format!("{id}::");
+        next.hidden_books.retain(|key| !key.starts_with(&prefix));
     }
     let old = next.recent.iter().find(|r| r.id == id).cloned();
     next.recent.retain(|r| r.id != id);
@@ -866,6 +902,7 @@ pub fn run() {
             close_book,
             frontend_ready,
             library_snapshot,
+            shelf_remove::remove_book,
             scan::scan_directories,
             scan::set_scan_directories,
             scan::scan_library,

@@ -75,7 +75,8 @@ export class Shelf {
     document.body.insertAdjacentHTML(
       "beforeend",
       `
-      <dialog id="metadata-dialog" class="app-dialog"><form method="dialog"><div class="dialog-heading"><div><div class="eyebrow">整理书籍</div><h2 id="metadata-title"></h2></div><wa-button class="icon-button dialog-close" aria-label="关闭书籍设置" size="s">×</wa-button></div><label class="form-field">分组<wa-select id="metadata-group" aria-label="书籍分组" size="s"></wa-select></label><label class="form-field">阅读分类<wa-select id="metadata-status" aria-label="阅读分类" size="s"><wa-option value="unread">未读</wa-option><wa-option value="reading">在读</wa-option><wa-option value="finished">读过</wa-option></wa-select></label><label class="check-label"><input id="metadata-pinned" type="checkbox">置顶这本书</label><label class="form-field">标签<input id="metadata-tags" class="field-input" placeholder="多个标签用逗号分隔" maxlength="1950"><span class="field-hint">例如：文学，待读，2026</span></label><label class="check-label"><input id="metadata-favorite" type="checkbox">收藏这本书</label><div class="dialog-actions"><wa-button class="quiet-button dialog-close" size="s">取消</wa-button><wa-button id="metadata-save" class="primary-button" size="s">保存</wa-button></div></form></dialog>
+      <dialog id="metadata-dialog" class="app-dialog"><form method="dialog"><div class="dialog-heading"><div><div class="eyebrow">整理书籍</div><h2 id="metadata-title"></h2></div><wa-button class="icon-button dialog-close" aria-label="关闭书籍设置" size="s">×</wa-button></div><label class="form-field">分组<wa-select id="metadata-group" aria-label="书籍分组" size="s"></wa-select></label><label class="form-field">阅读分类<wa-select id="metadata-status" aria-label="阅读分类" size="s"><wa-option value="unread">未读</wa-option><wa-option value="reading">在读</wa-option><wa-option value="finished">读过</wa-option></wa-select></label><label class="check-label"><input id="metadata-pinned" type="checkbox">置顶这本书</label><label class="form-field">标签<input id="metadata-tags" class="field-input" placeholder="多个标签用逗号分隔" maxlength="1950"><span class="field-hint">例如：文学，待读，2026</span></label><label class="check-label"><input id="metadata-favorite" type="checkbox">收藏这本书</label><div class="dialog-actions"><wa-button id="metadata-remove" class="text-button remove-book-button" size="s">从书架移除</wa-button><wa-button class="quiet-button dialog-close" size="s">取消</wa-button><wa-button id="metadata-save" class="primary-button" size="s">保存</wa-button></div></form></dialog>
+      <dialog id="remove-book-dialog" class="app-dialog"><div class="dialog-heading"><h2 id="remove-book-title">从书架移除</h2><wa-button id="remove-book-close" class="icon-button" size="s" aria-label="关闭移除确认">×</wa-button></div><p id="remove-book-description" class="dialog-description"></p><p id="remove-book-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="remove-book-cancel" class="quiet-button" size="s">取消</wa-button><wa-button id="remove-book-confirm" class="primary-button danger-button" size="s">确认移除</wa-button></div></dialog>
       <dialog id="groups-dialog" class="app-dialog"><div class="dialog-heading"><h2>管理分组</h2><wa-button class="icon-button dialog-close" aria-label="关闭分组管理" size="s">×</wa-button></div><form id="new-group-form" class="group-create"><input id="group-name" class="field-input" required maxlength="64" aria-label="新分组名称" placeholder="新分组名称"><wa-button id="group-create" class="primary-button" size="s">新建</wa-button></form><div id="group-editor"></div><p class="field-hint">删除分组后，书籍会回到“未分组”。</p></dialog>`,
     );
     document
@@ -452,10 +453,53 @@ export class Shelf {
             b.disabled = false;
           }
         })();
+      $("#metadata-remove").onclick = () => this.remove(item);
       showDialog($<HTMLDialogElement>("#metadata-dialog"));
     } catch (e) {
       this.reportError(e);
     }
+  }
+  remove(item: ShelfItem) {
+    const dialog = $<HTMLDialogElement>("#remove-book-dialog");
+    $("#remove-book-title").textContent = `移除“${item.title}”？`;
+    $("#remove-book-description").textContent = item.partId
+      ? "只从书架移除这本子书，其他子书及原 EPUB 保留。刷新不会恢复；手动重新打开原 EPUB 会恢复该合集已移除的子书，阅读记录和手动信息保留。"
+      : "只从书架移除，保留原 EPUB、阅读记录和手动信息。扫描和刷新将忽略这本书；手动重新打开文件可恢复。";
+    $("#remove-book-error").hidden = true;
+    let busy = false;
+    const controls = [
+      "remove-book-close",
+      "remove-book-cancel",
+      "remove-book-confirm",
+    ];
+    for (const id of controls.slice(0, 2))
+      $("#" + id).onclick = () => {
+        if (!busy) dialog.close();
+      };
+    dialog.oncancel = (event) => {
+      if (busy) event.preventDefault();
+    };
+    $("#remove-book-confirm").onclick = async () => {
+      if (busy) return;
+      busy = true;
+      for (const id of controls) $<WaButton>("#" + id).disabled = true;
+      try {
+        await invoke("remove_book", {
+          sourceId: item.sourceId,
+          partId: item.partId,
+        });
+        await this.refresh();
+        dialog.close();
+        $<HTMLDialogElement>("#metadata-dialog").close();
+      } catch (error) {
+        $("#remove-book-error").textContent = String(error);
+        $("#remove-book-error").hidden = false;
+      } finally {
+        busy = false;
+        for (const id of controls) $<WaButton>("#" + id).disabled = false;
+      }
+    };
+    showDialog(dialog);
   }
   showGroups() {
     this.renderGroupEditor();

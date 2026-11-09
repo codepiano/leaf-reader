@@ -8,6 +8,7 @@ type Report = {
   found: number;
   added: number;
   existing: number;
+  excluded?: number;
   updated?: number;
   missing?: number;
   failed: number;
@@ -15,7 +16,7 @@ type Report = {
   truncated: boolean;
 };
 function reportHTML(result: Report, action = "扫描", noDirectories = false) {
-  return `<p>${result.truncated ? action + "部分完成" : action + "完成"}：发现 ${result.found} 本，新增 ${result.added} 本，更新 ${result.updated ?? 0} 本，已有 ${result.existing} 本，文件不可用 ${result.missing ?? 0} 本，失败 ${result.failed} 项。</p>${noDirectories ? "<p>尚未配置扫描目录；已检查现有书籍的文件状态，可在侧栏“扫描目录”中添加来源。</p>" : ""}${result.truncated ? '<p class="dialog-error">已达到本次扫描上限（100,000 个目录项或 10,000 本书），部分内容尚未扫描。请缩小扫描目录范围。</p>' : ""}${result.errors.length ? `<details><summary>查看失败详情（最多 50 条）</summary><ul>${result.errors.map((message) => `<li>${esc(message)}</li>`).join("")}</ul></details>` : ""}`;
+  return `<p>${result.truncated ? action + "部分完成" : action + "完成"}：发现 ${result.found} 本，新增 ${result.added} 本，更新 ${result.updated ?? 0} 本，已有 ${result.existing} 本，已忽略 ${result.excluded ?? 0} 本，文件不可用 ${result.missing ?? 0} 本，失败 ${result.failed} 项。</p>${noDirectories ? "<p>尚未配置扫描目录；已检查现有书籍的文件状态，可在侧栏“扫描目录”中添加来源。</p>" : ""}${result.truncated ? '<p class="dialog-error">已达到本次扫描上限（100,000 个目录项或 10,000 本书），部分内容尚未扫描。请缩小扫描目录范围。</p>' : ""}${result.errors.length ? `<details><summary>查看失败详情（最多 50 条）</summary><ul>${result.errors.map((message) => `<li>${esc(message)}</li>`).join("")}</ul></details>` : ""}`;
 }
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;

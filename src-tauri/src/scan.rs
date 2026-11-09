@@ -10,6 +10,7 @@ pub struct Report {
     found: usize,
     added: usize,
     existing: usize,
+    excluded: usize,
     updated: usize,
     missing: usize,
     failed: usize,
@@ -57,7 +58,7 @@ pub fn configure(state: &ReaderState, directories: Vec<String>) -> Result<Vec<St
 // Only metadata is read during discovery. Sessions, reading times and source files are untouched.
 pub fn scan(state: &ReaderState) -> Result<Report, String> {
     let _scan = SCAN_LOCK.lock().map_err(|e| e.to_string())?;
-    let (directories, mut known, aliases) = {
+    let (directories, mut known, aliases, excluded) = {
         let library = state.library.lock().map_err(|e| e.to_string())?;
         let records: HashMap<_, _> = library
             .recent
@@ -81,6 +82,19 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
                 .map(|r| r.path.clone())
                 .collect::<HashSet<_>>(),
             aliases,
+            library
+                .recent
+                .iter()
+                .filter(|r| library.hidden_books.contains(&r.id))
+                .map(|r| r.path.clone())
+                .chain(
+                    library
+                        .import_sources
+                        .iter()
+                        .filter(|(_, id)| library.hidden_books.contains(*id))
+                        .map(|(path, _)| path.clone()),
+                )
+                .collect::<HashSet<_>>(),
         )
     };
     let record_paths = known.clone();
@@ -168,6 +182,10 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
             }
             report.found += 1;
             let path_string = path.to_string_lossy().to_string();
+            if excluded.contains(&path_string) {
+                report.excluded += 1;
+                continue;
+            }
             if known.contains(&path_string) {
                 report.existing += 1;
                 if !record_paths.contains(&path_string) {
@@ -270,8 +288,13 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
             }
         }
     }
+    updated.retain(|id| !next.hidden_books.contains(id));
     report.updated = updated.len();
-    report.missing = next.recent.iter().filter(|book| !book.available).count();
+    report.missing = next
+        .recent
+        .iter()
+        .filter(|book| !book.available && !next.hidden_books.contains(&book.id))
+        .count();
     if dirty {
         persist(state, &next)?;
         *library = next;
