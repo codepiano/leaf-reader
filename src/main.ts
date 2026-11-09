@@ -1,3 +1,4 @@
+import { initFocus, showDialog } from "./focus";
 import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -22,6 +23,8 @@ import { initScanDirectories } from "./scan-directories";
 import { ReadingClock } from "./reading-clock";
 import { initBookInfo, showBookInfo } from "./book-info";
 import { initLibrarySettings } from "./library-settings";
+
+initFocus();
 
 type Settings = {
   size: number;
@@ -218,7 +221,7 @@ async function collectionDialog() {
       ? "更新子书划分"
       : "转为合集模式";
     $("#collection-error").hidden = true;
-    $<HTMLDialogElement>("#collection-dialog").showModal();
+    showDialog($<HTMLDialogElement>("#collection-dialog"));
   } catch (e) {
     showError(e);
   }

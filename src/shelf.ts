@@ -1,3 +1,4 @@
+import { showDialog } from "./focus";
 import { compareBooks, savedSort, validSort, sortLabels } from "./shelf-sort";
 import { initShelfSize } from "./shelf-size";
 import { Covers } from "./covers";
@@ -451,14 +452,14 @@ export class Shelf {
             b.disabled = false;
           }
         })();
-      $<HTMLDialogElement>("#metadata-dialog").showModal();
+      showDialog($<HTMLDialogElement>("#metadata-dialog"));
     } catch (e) {
       this.reportError(e);
     }
   }
   showGroups() {
     this.renderGroupEditor();
-    $<HTMLDialogElement>("#groups-dialog").showModal();
+    showDialog($<HTMLDialogElement>("#groups-dialog"));
     $("#group-name").focus();
   }
   renderGroupEditor() {
