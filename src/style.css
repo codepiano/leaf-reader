@@ -1583,7 +1583,7 @@ select {
   font-size: 10px;
 }
 .shelf-sort wa-select {
-  width: 146px;
+  width: 176px;
   margin: 0;
 }
 
@@ -1728,4 +1728,30 @@ select {
 }
 .collection-extras wa-button::part(button) {
   font-size: 12px;
+}
+
+.shelf-tools #shelf-refresh {
+  margin-left: 0;
+}
+.shelf-refresh-report {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin: -4px 0 16px;
+  overflow-wrap: anywhere;
+}
+.shelf-refresh-report p {
+  margin: 0 0 4px;
+}
+.shelf-refresh-report ul {
+  padding-left: 18px;
+}
+.book-file-status {
+  display: inline-block;
+  padding: 2px 5px;
+  margin: 7px 6px 0 0;
+  border-radius: 3px;
+  font-size: 10px;
+  color: #865c43;
+  background: #f4eadd;
 }

@@ -157,7 +157,7 @@ window.addEventListener("leaf-preferences", (event) => {
   readingClock.preference(enabled);
 });
 initLibrarySettings(showError, () => flushProgress());
-initScanDirectories(showError, () => refreshShelf());
+initScanDirectories(showError, () => refreshShelf(true));
 initBookInfo(
   () => readingClock.flush(),
   async (info, sourceId, partId) => {
@@ -267,8 +267,8 @@ function setBusy(value: boolean) {
 function overall(p: Progress, count: number) {
   return Math.round(((p.chapter + p.fraction) / Math.max(1, count)) * 100);
 }
-async function refreshShelf() {
-  await shelf.refresh();
+async function refreshShelf(invalidateCovers = false) {
+  await shelf.refresh(invalidateCovers);
 }
 function frameWindow() {
   return $<HTMLIFrameElement>("#reader").contentWindow;

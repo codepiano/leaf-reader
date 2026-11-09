@@ -1,5 +1,7 @@
 use super::*;
 
+static SCAN_LOCK: Mutex<()> = Mutex::new(());
+
 const ENTRY_LIMIT: usize = 100_000;
 const BOOK_LIMIT: usize = 10_000;
 const ERROR_LIMIT: usize = 50;
@@ -8,6 +10,8 @@ pub struct Report {
     found: usize,
     added: usize,
     existing: usize,
+    updated: usize,
+    missing: usize,
     failed: usize,
     errors: Vec<String>,
     truncated: bool,
@@ -52,6 +56,7 @@ pub fn configure(state: &ReaderState, directories: Vec<String>) -> Result<Vec<St
 
 // Only metadata is read during discovery. Sessions, reading times and source files are untouched.
 pub fn scan(state: &ReaderState) -> Result<Report, String> {
+    let _scan = SCAN_LOCK.lock().map_err(|e| e.to_string())?;
     let (directories, mut known, aliases) = {
         let library = state.library.lock().map_err(|e| e.to_string())?;
         let records: HashMap<_, _> = library
@@ -78,6 +83,7 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
             aliases,
         )
     };
+    let record_paths = known.clone();
     for (source, destination) in aliases {
         if Path::new(&destination).is_file() {
             known.insert(source);
@@ -86,7 +92,8 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
     let mut report = Report::default();
     let mut visited = HashSet::new();
     let mut seen_files = HashSet::new();
-    let mut additions = Vec::new();
+    let mut discoveries = Vec::new();
+    let mut unreadable = HashSet::new();
     let mut entries = 0;
     'roots: for root in directories {
         let root = PathBuf::from(root);
@@ -163,13 +170,16 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
             let path_string = path.to_string_lossy().to_string();
             if known.contains(&path_string) {
                 report.existing += 1;
-                continue;
+                if !record_paths.contains(&path_string) {
+                    continue;
+                }
             }
             match Book::open(&path) {
                 Ok(book) => {
                     let mut hash = DefaultHasher::new();
                     path_string.hash(&mut hash);
-                    additions.push(Recent {
+                    discoveries.push(Recent {
+                        available: true,
                         id: format!("{:x}", hash.finish()),
                         path: path_string,
                         title: book.title,
@@ -179,33 +189,90 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
                         opened: 0,
                     });
                 }
-                Err(e) => report.error(&path, e),
+                Err(e) => {
+                    unreadable.insert(path_string);
+                    report.error(&path, e);
+                }
             }
         }
     }
+    // Check source paths outside the lock. Unseen new books opened during IO keep their current state.
+    let mut availability: HashMap<_, _> = record_paths
+        .iter()
+        .cloned()
+        .chain(discoveries.iter().map(|book| book.path.clone()))
+        .map(|path| {
+            let available = Path::new(&path).is_file();
+            (path, available)
+        })
+        .collect();
+    for path in unreadable {
+        availability.insert(path, false);
+    }
     // Merge into the latest state, preserving edits and books opened while IO was in progress.
-    if !additions.is_empty() {
-        let mut library = state.library.lock().map_err(|e| e.to_string())?;
-        let mut next = library.clone();
-        let mut ids: HashSet<_> = next.recent.iter().map(|r| r.id.clone()).collect();
-        let destinations: HashMap<_, _> = next
-            .recent
-            .iter()
-            .map(|r| (r.id.clone(), r.path.clone()))
-            .collect();
-        for book in additions {
+    let mut library = state.library.lock().map_err(|e| e.to_string())?;
+    let mut next = library.clone();
+    let mut indexes: HashMap<_, _> = next
+        .recent
+        .iter()
+        .enumerate()
+        .map(|(index, book)| (book.id.clone(), index))
+        .collect();
+    let destinations: HashMap<_, _> = next
+        .recent
+        .iter()
+        .map(|book| (book.id.clone(), book.path.clone()))
+        .collect();
+    let mut updated = HashSet::new();
+    let mut dirty = false;
+    for book in discoveries {
+        if let Some(&index) = indexes.get(&book.id) {
+            let record = &mut next.recent[index];
+            if record.title != book.title
+                || record.author != book.author
+                || record.chapters != book.chapters
+            {
+                record.title = book.title;
+                record.author = book.author;
+                record.chapters = book.chapters;
+                updated.insert(record.id.clone());
+                dirty = true;
+            }
+            if !known.contains(&book.path) {
+                report.existing += 1;
+            }
+        } else {
             let imported = next
                 .import_sources
                 .get(&book.path)
                 .and_then(|id| destinations.get(id))
-                .is_some_and(|path| Path::new(path).is_file());
-            if !imported && ids.insert(book.id.clone()) {
+                .is_some_and(|path| availability.get(path).copied().unwrap_or(true));
+            if imported {
+                if !known.contains(&book.path) {
+                    report.existing += 1;
+                }
+            } else {
+                indexes.insert(book.id.clone(), next.recent.len());
                 next.recent.push(book);
                 report.added += 1;
-            } else {
-                report.existing += 1;
+                dirty = true;
             }
         }
+    }
+    for record in &mut next.recent {
+        if let Some(&available) = availability.get(&record.path) {
+            if record.available != available {
+                if available {
+                    updated.insert(record.id.clone());
+                }
+                record.available = available;
+                dirty = true;
+            }
+        }
+    }
+    report.updated = updated.len();
+    report.missing = next.recent.iter().filter(|book| !book.available).count();
+    if dirty {
         persist(state, &next)?;
         *library = next;
     }
@@ -403,6 +470,86 @@ mod tests {
         // Losing an imported copy must not hide the still-readable original from scans.
         fs::remove_file(copied_again).unwrap();
         assert_eq!(scan(&state).unwrap().added, 1);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn refresh_updates_metadata_and_availability_without_losing_personal_state() {
+        let (state, dir) = state();
+        let source = dir.join("sources");
+        fs::create_dir(&source).unwrap();
+        let file = source.join("book.epub");
+        fs::write(&file, include_bytes!("../../fixtures/quiet-days.epub")).unwrap();
+        configure(&state, vec![source.to_string_lossy().into()]).unwrap();
+        scan(&state).unwrap();
+        let opened = open_path(&state, &file).unwrap();
+        write_progress(&state, &opened.token, 1, 0.45).unwrap();
+        update_metadata(
+            &state,
+            &opened.id,
+            None,
+            "文学".into(),
+            vec!["精选".into()],
+            true,
+        )
+        .unwrap();
+        {
+            let mut library = state.library.lock().unwrap();
+            let meta = library.metadata.get_mut(&opened.id).unwrap();
+            meta.pinned = true;
+            meta.details.title = "手动书名".into();
+            meta.details.author = "手动作者".into();
+            library.reading_ms.insert(opened.id.clone(), 12000);
+        }
+        let before = state.library.lock().unwrap().recent[0].clone();
+        // Atomic replacement leaves the active session's original archive intact.
+        let replacement = source.join("replacement.tmp");
+        fs::write(
+            &replacement,
+            include_bytes!("../../fixtures/anthology.epub"),
+        )
+        .unwrap();
+        fs::rename(replacement, &file).unwrap();
+        let refreshed = scan(&state).unwrap();
+        assert_eq!(refreshed.updated, 1);
+        assert_eq!(refreshed.added, 0);
+        {
+            let library = state.library.lock().unwrap();
+            let record = &library.recent[0];
+            let original = Book::open(&file).unwrap();
+            assert_eq!(record.title, original.title);
+            assert_eq!(record.author, original.author);
+            assert_eq!(record.chapters, original.chapters.len());
+            assert_eq!(record.opened, before.opened);
+            assert_eq!(record.progress.fraction, 0.45);
+            let meta = &library.metadata[&opened.id];
+            assert!(meta.pinned && meta.favorite);
+            assert_eq!(meta.details.title, "手动书名");
+            assert_eq!(meta.details.author, "手动作者");
+            assert_eq!(meta.group, "文学");
+            assert_eq!(meta.tags, ["精选"]);
+            assert_eq!(library.reading_ms[&opened.id], 12000);
+        }
+        assert_eq!(
+            state.session.lock().unwrap().as_ref().unwrap().token,
+            opened.token
+        );
+        fs::remove_file(&file).unwrap();
+        assert_eq!(scan(&state).unwrap().missing, 1);
+        assert!(!state.library.lock().unwrap().recent[0].available);
+        fs::write(&file, b"broken").unwrap();
+        let broken = scan(&state).unwrap();
+        assert_eq!(broken.failed, 1);
+        assert_eq!(broken.missing, 1);
+        fs::write(&file, include_bytes!("../../fixtures/anthology.epub")).unwrap();
+        let restored = scan(&state).unwrap();
+        assert_eq!(restored.updated, 1);
+        assert_eq!(restored.missing, 0);
+        assert_eq!(restored.added, 0);
+        let saved: Library = serde_json::from_slice(&fs::read(&state.storage).unwrap()).unwrap();
+        assert_eq!(saved.recent.len(), 1);
+        assert!(saved.recent[0].available);
+        assert_eq!(saved.recent[0].progress.fraction, 0.45);
+        assert_eq!(scan(&state).unwrap().updated, 0);
         fs::remove_dir_all(dir).unwrap();
     }
     #[test]

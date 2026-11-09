@@ -146,6 +146,7 @@ export class Shelf {
         ? r.collection.parts
             .filter((p) => !isFrontmatter(p))
             .map((p) => ({
+              available: r.available !== false,
               key: `${r.id}::${p.id}`,
               sourceId: r.id,
               partId: p.id,
@@ -160,6 +161,7 @@ export class Shelf {
             }))
         : [
             {
+              available: r.available !== false,
               key: r.id,
               sourceId: r.id,
               partId: null,
@@ -174,7 +176,8 @@ export class Shelf {
           ],
     );
   }
-  async refresh() {
+  async refresh(invalidateCovers = false) {
+    if (invalidateCovers) this.covers.invalidate();
     this.data = await invoke<Snapshot>("library_snapshot");
     this.render();
   }
@@ -332,7 +335,7 @@ export class Shelf {
       `置顶优先 · ${sortLabels[this.sort]}`;
     $("#empty").hidden = all.length > 0;
     $("#filter-empty").hidden = !all.length || list.length > 0;
-    $(".shelf-tools").toggleAttribute("hidden", all.length === 0);
+    $(".shelf-tools").hidden = false;
     $("#filter-empty").textContent = q
       ? "没有找到匹配的书籍。"
       : this.filter.kind === "recent"
@@ -361,7 +364,7 @@ export class Shelf {
           minute: "2-digit",
         }).format(i.opened < 1e12 ? i.opened * 1000 : i.opened)
       : "尚未阅读";
-    return `<article class="book-tile" data-book-key="${esc(i.key)}"><button class="book-card" data-action="read" data-key="${esc(i.key)}" aria-label="继续阅读 ${esc(i.title)}"><div class="book-cover cover-${n % 4}"><div class="cover-frame"><span class="cover-label">THE READING COLLECTION</span><h3>${esc(i.title)}</h3><span class="cover-author">${esc(i.author || "佚名")}</span>${this.icon("leaf")}<span class="cover-footer">${i.partId ? "COLLECTION" : "LEAF"} / ${String(n + 1).padStart(2, "0")}</span></div><img class="embedded-cover" data-cover-id="${esc(i.sourceId)}" alt="" decoding="async" aria-hidden="true"><span class="cover-spine"></span><div class="book-badges">${i.metadata.pinned ? '<span class="book-badge pin-badge">置顶</span>' : ""}${i.metadata.favorite ? '<span class="book-badge favorite-badge" aria-label="已收藏">★ 收藏</span>' : ""}</div></div><div class="book-info"><h3 title="${esc(i.title)}">${esc(i.title)}</h3><p>${esc(i.author || "作者未知")}</p><div class="book-progress"><span>${progress}% 已读</span>${this.icon("arrow")}</div></div></button>${i.sourceTitle ? `<button class="source-link" data-action="collection" data-key="${esc(i.key)}" title="${esc(i.sourceTitle)}">合集 · ${esc(i.sourceTitle)}</button>` : ""}<span class="book-status status-${i.metadata.reading_status}">${statusTitle(i.metadata.reading_status)}</span><div class="book-tags">${i.metadata.tags.map((t) => `<span title="${esc(t)}">${esc(t)}</span>`).join("")}</div><div class="book-actions"><span class="read-time">${esc(time)}</span><wa-button class="icon-button favorite-button ${i.metadata.favorite ? "is-favorite" : ""}" size="s" data-action="favorite" data-key="${esc(i.key)}" aria-label="${i.metadata.favorite ? "取消收藏" : "收藏"} ${esc(i.title)}" title="${i.metadata.favorite ? "取消收藏" : "收藏"}">${i.metadata.favorite ? "★" : "☆"}</wa-button><wa-button class="icon-button pin-button" size="s" data-action="pin" data-key="${esc(i.key)}" aria-label="${i.metadata.pinned ? "取消置顶" : "置顶"} ${esc(i.title)}" title="${i.metadata.pinned ? "取消置顶" : "置顶"}">${i.metadata.pinned ? "↓" : "↑"}</wa-button><wa-button class="icon-button" size="s" data-action="info" data-key="${esc(i.key)}" aria-label="图书信息 ${esc(i.title)}" title="图书信息">ⓘ</wa-button><wa-button class="icon-button" size="s" data-action="metadata" data-key="${esc(i.key)}" aria-label="整理 ${esc(i.title)}" title="分组与标签">···</wa-button></div></article>`;
+    return `<article class="book-tile" data-book-key="${esc(i.key)}"><button class="book-card" data-action="read" data-key="${esc(i.key)}" aria-label="继续阅读 ${esc(i.title)}"><div class="book-cover cover-${n % 4}"><div class="cover-frame"><span class="cover-label">THE READING COLLECTION</span><h3>${esc(i.title)}</h3><span class="cover-author">${esc(i.author || "佚名")}</span>${this.icon("leaf")}<span class="cover-footer">${i.partId ? "COLLECTION" : "LEAF"} / ${String(n + 1).padStart(2, "0")}</span></div><img class="embedded-cover" data-cover-id="${esc(i.sourceId)}" alt="" decoding="async" aria-hidden="true"><span class="cover-spine"></span><div class="book-badges">${i.metadata.pinned ? '<span class="book-badge pin-badge">置顶</span>' : ""}${i.metadata.favorite ? '<span class="book-badge favorite-badge" aria-label="已收藏">★ 收藏</span>' : ""}</div></div><div class="book-info"><h3 title="${esc(i.title)}">${esc(i.title)}</h3><p>${esc(i.author || "作者未知")}</p><div class="book-progress"><span>${progress}% 已读</span>${this.icon("arrow")}</div></div></button>${i.sourceTitle ? `<button class="source-link" data-action="collection" data-key="${esc(i.key)}" title="${esc(i.sourceTitle)}">合集 · ${esc(i.sourceTitle)}</button>` : ""}${i.available === false ? '<span class="book-file-status">文件不可用</span>' : ""}<span class="book-status status-${i.metadata.reading_status}">${statusTitle(i.metadata.reading_status)}</span><div class="book-tags">${i.metadata.tags.map((t) => `<span title="${esc(t)}">${esc(t)}</span>`).join("")}</div><div class="book-actions"><span class="read-time">${esc(time)}</span><wa-button class="icon-button favorite-button ${i.metadata.favorite ? "is-favorite" : ""}" size="s" data-action="favorite" data-key="${esc(i.key)}" aria-label="${i.metadata.favorite ? "取消收藏" : "收藏"} ${esc(i.title)}" title="${i.metadata.favorite ? "取消收藏" : "收藏"}">${i.metadata.favorite ? "★" : "☆"}</wa-button><wa-button class="icon-button pin-button" size="s" data-action="pin" data-key="${esc(i.key)}" aria-label="${i.metadata.pinned ? "取消置顶" : "置顶"} ${esc(i.title)}" title="${i.metadata.pinned ? "取消置顶" : "置顶"}">${i.metadata.pinned ? "↓" : "↑"}</wa-button><wa-button class="icon-button" size="s" data-action="info" data-key="${esc(i.key)}" aria-label="图书信息 ${esc(i.title)}" title="图书信息">ⓘ</wa-button><wa-button class="icon-button" size="s" data-action="metadata" data-key="${esc(i.key)}" aria-label="整理 ${esc(i.title)}" title="分组与标签">···</wa-button></div></article>`;
   }
   async pin(item: ShelfItem, button: WaButton) {
     button.disabled = true;

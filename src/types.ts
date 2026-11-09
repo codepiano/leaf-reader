@@ -75,6 +75,7 @@ export type Book = {
   metadata: Metadata;
 };
 export type Recent = {
+  available?: boolean;
   id: string;
   path: string;
   title: string;
@@ -88,6 +89,7 @@ export type Recent = {
 };
 export type Snapshot = { books: Recent[]; groups: string[] };
 export type ShelfItem = {
+  available?: boolean;
   key: string;
   sourceId: string;
   partId: string | null;

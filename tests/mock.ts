@@ -170,17 +170,29 @@ export async function mockDesktop(
               return s.scan_directories;
             }
             if (command === "scan_library") {
+              const delay = Number(
+                localStorage.getItem("mock.scan_delay") || 0,
+              );
+              if (delay)
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              if (localStorage.getItem("mock.scan_failure"))
+                throw "保存书架失败";
               const before = s.books.length;
               if (s.scan_directories?.length) {
                 ensure(s, "sample");
                 ensure(s, "anthology");
               }
+              for (const book of s.books)
+                book.available =
+                  book.id !== localStorage.getItem("mock.unavailable");
               save(s);
               const failed = localStorage.getItem("mock.scan_error") === "1";
               return {
                 found: s.scan_directories?.length ? 2 : 0,
                 added: s.books.length - before,
                 existing: before,
+                updated: 0,
+                missing: s.books.filter((book: any) => !book.available).length,
                 failed: failed ? 1 : 0,
                 errors: failed
                   ? ["/sources/broken.epub：文件不是有效的 EPUB"]

@@ -3,6 +3,22 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 // Visible covers only, at most two requests in flight. Removing distant src releases decoded images.
 export class Covers {
   private dispose = () => {};
+  private version = (() => {
+    try {
+      return localStorage.getItem("leaf.cover-refresh") || "";
+    } catch {
+      return "";
+    }
+  })();
+  private refreshes = 0;
+  invalidate() {
+    this.version = `${Date.now().toString(36)}-${++this.refreshes}`;
+    try {
+      localStorage.setItem("leaf.cover-refresh", this.version);
+    } catch {
+      /* Current session still refreshes covers. */
+    }
+  }
   bind(root: HTMLElement) {
     this.dispose();
     const queue = new Set<HTMLImageElement>();
@@ -42,7 +58,8 @@ export class Covers {
         img.src =
           convertFileSrc("", "epub") +
           "cover/" +
-          encodeURIComponent(img.dataset.coverId!);
+          encodeURIComponent(img.dataset.coverId!) +
+          (this.version ? `?v=${encodeURIComponent(this.version)}` : "");
       }
     };
     const observer = new IntersectionObserver(

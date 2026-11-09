@@ -46,8 +46,13 @@ struct BookMeta {
     reading_status: Option<ReadingStatus>,
     details: details::Details,
 }
+fn source_available() -> bool {
+    true
+}
 #[derive(Clone, Serialize, Deserialize)]
 struct Recent {
+    #[serde(default = "source_available")]
+    available: bool,
     id: String,
     path: String,
     title: String,
@@ -352,6 +357,7 @@ fn open_scoped_from(
     next.recent.insert(
         0,
         Recent {
+            available: true,
             id: id.clone(),
             path,
             title: book.title.clone(),

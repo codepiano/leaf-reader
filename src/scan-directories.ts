@@ -7,16 +7,29 @@ type Report = {
   found: number;
   added: number;
   existing: number;
+  updated?: number;
+  missing?: number;
   failed: number;
   errors: string[];
   truncated: boolean;
 };
+function reportHTML(result: Report, action = "扫描", noDirectories = false) {
+  return `<p>${result.truncated ? action + "部分完成" : action + "完成"}：发现 ${result.found} 本，新增 ${result.added} 本，更新 ${result.updated ?? 0} 本，已有 ${result.existing} 本，文件不可用 ${result.missing ?? 0} 本，失败 ${result.failed} 项。</p>${noDirectories ? "<p>尚未配置扫描目录；已检查现有书籍的文件状态，可在侧栏“扫描目录”中添加来源。</p>" : ""}${result.truncated ? '<p class="dialog-error">已达到本次扫描上限（100,000 个目录项或 10,000 本书），部分内容尚未扫描。请缩小扫描目录范围。</p>' : ""}${result.errors.length ? `<details><summary>查看失败详情（最多 50 条）</summary><ul>${result.errors.map((message) => `<li>${esc(message)}</li>`).join("")}</ul></details>` : ""}`;
+}
 const $ = <T extends HTMLElement = HTMLElement>(s: string) =>
   document.querySelector<T>(s)!;
 export function initScanDirectories(
   reportError: (error: unknown) => void,
   refresh: () => Promise<unknown>,
 ) {
+  $(".shelf-tools").insertAdjacentHTML(
+    "afterbegin",
+    '<wa-button id="shelf-refresh" class="quiet-button" size="s" title="重新扫描已配置的目录，更新书架和封面">↻ 刷新</wa-button>',
+  );
+  $(".shelf-tools").insertAdjacentHTML(
+    "afterend",
+    '<section id="shelf-refresh-report" class="shelf-refresh-report" role="status" hidden></section>',
+  );
   $(".sidebar-bottom").insertAdjacentHTML(
     "afterbegin",
     '<wa-button id="scan-settings" class="quiet-button" size="s">扫描目录</wa-button>',
@@ -28,7 +41,12 @@ export function initScanDirectories(
   const dialog = $<HTMLDialogElement>("#scan-dialog");
   let directories: string[] = [];
   let busy = false;
+  let scanning = false;
   const render = () => {
+    $<WaButton>("#shelf-refresh").disabled = busy;
+    $<WaButton>("#scan-settings").disabled = busy;
+    $("#shelf-refresh").textContent = scanning ? "刷新中…" : "↻ 刷新";
+    $("#shelf-refresh").setAttribute("aria-busy", String(scanning));
     $("#scan-directory-list").innerHTML = directories.length
       ? directories
           .map(
@@ -94,6 +112,7 @@ export function initScanDirectories(
     }
   };
   async function save(scan: boolean) {
+    if (busy) return;
     busy = true;
     render();
     $("#scan-error").hidden = true;
@@ -108,18 +127,44 @@ export function initScanDirectories(
       }
       $("#scan-report").hidden = false;
       $("#scan-report").textContent = "正在读取 EPUB 元数据…";
+      scanning = true;
+      render();
       const result = await invoke<Report>("scan_library");
       await refresh();
-      $("#scan-report").innerHTML =
-        `<p>扫描完成：发现 ${result.found} 本，新增 ${result.added} 本，已有 ${result.existing} 本，失败 ${result.failed} 项。</p>${result.truncated ? '<p class="dialog-error">已达到本次扫描上限（100,000 个目录项或 10,000 本书），部分内容尚未扫描。请缩小扫描目录范围。</p>' : ""}${result.errors.length ? `<details><summary>查看失败详情（最多 50 条）</summary><ul>${result.errors.map((message) => `<li>${esc(message)}</li>`).join("")}</ul></details>` : ""}`;
+      $("#scan-report").innerHTML = reportHTML(result);
     } catch (e) {
       $("#scan-report").hidden = true;
       error(e);
     } finally {
       busy = false;
+      scanning = false;
       render();
     }
   }
+  $("#shelf-refresh").onclick = async () => {
+    if (busy) return;
+    busy = true;
+    scanning = true;
+    render();
+    const status = $("#shelf-refresh-report");
+    status.hidden = false;
+    status.textContent = "正在重新扫描来源目录，更新书架…";
+    try {
+      const directories = await invoke<string[]>("scan_directories");
+      const result = await invoke<Report>("scan_library");
+      const view = $("#library-view"),
+        scroll = view.scrollTop;
+      await refresh();
+      view.scrollTop = scroll;
+      status.innerHTML = reportHTML(result, "刷新", directories.length === 0);
+    } catch (e) {
+      status.textContent = `刷新失败：${String(e)}`;
+    } finally {
+      busy = false;
+      scanning = false;
+      render();
+    }
+  };
   $("#scan-save").onclick = () => void save(false);
   $("#scan-run").onclick = () => void save(true);
   for (const id of ["scan-close", "scan-cancel"])
