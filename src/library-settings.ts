@@ -1,3 +1,4 @@
+import { showDialog } from "./focus";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type WaButton from "@awesome.me/webawesome/dist/components/button/button.js";
@@ -59,7 +60,7 @@ export function initLibrarySettings(
         settings.track_reading_time ?? true;
       $("#library-settings-error").hidden = true;
       render();
-      dialog.showModal();
+      showDialog(dialog);
     } catch (e) {
       reportError(e);
     }

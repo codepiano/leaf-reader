@@ -1,3 +1,4 @@
+import { showDialog } from "./focus";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type WaButton from "@awesome.me/webawesome/dist/components/button/button.js";
@@ -53,7 +54,7 @@ export function initScanDirectories(
       $("#scan-report").hidden = true;
       $("#scan-error").hidden = true;
       render();
-      dialog.showModal();
+      showDialog(dialog);
     } catch (e) {
       reportError(e);
     }

@@ -1,3 +1,4 @@
+import { showDialog } from "./focus";
 import { invoke } from "@tauri-apps/api/core";
 import {
   escapeHTML as esc,
@@ -56,7 +57,7 @@ export function initBookInfo(
     }
     $("#details-error").hidden = true;
     ($("#book-info-dialog") as HTMLDialogElement).close();
-    ($("#details-dialog") as HTMLDialogElement).showModal();
+    showDialog($("#details-dialog") as HTMLDialogElement);
   };
   let saving = false;
   const closeEditor = (event: Event) => {
@@ -145,7 +146,7 @@ export async function showBookInfo(
   ).disabled = true;
   $("#book-info-title").textContent = "图书信息";
   $("#book-info-content").textContent = "正在读取…";
-  if (!dialog.open) dialog.showModal();
+  if (!dialog.open) showDialog(dialog);
   try {
     await flushTime();
     const info = await invoke<Info>("book_info", { sourceId, partId });

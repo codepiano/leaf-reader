@@ -11,6 +11,8 @@
   --wa-color-brand-on-loud: #fffdf6;
   --wa-color-focus: #7e9271;
   --wa-focus-ring-color: #7e9271;
+  --wa-focus-ring-width: 1px;
+  --wa-focus-ring-offset: 2px;
   --wa-border-radius-m: 0.375rem;
   --wa-form-control-height-small: 38px;
   --wa-form-control-value-color: var(--ink);
@@ -26,6 +28,20 @@ wa-button::part(button) {
   box-shadow: none;
   min-height: 0;
   line-height: 1.5;
+}
+/* Pointer clicks keep focus for accessibility without drawing a keyboard ring. */
+wa-button::part(button) {
+  outline: none;
+}
+:root[data-focus-input="keyboard"] wa-button::part(button):focus-visible {
+  outline: var(--wa-focus-ring);
+  outline-offset: var(--wa-focus-ring-offset);
+}
+:root[data-focus-input="pointer"] :is(button, a):focus {
+  outline: none;
+}
+.app-dialog h2:focus {
+  outline: none;
 }
 wa-button.primary-button,
 wa-button.quiet-button,
@@ -65,6 +81,9 @@ wa-button.text-button::part(button) {
   font-size: 11px;
 }
 wa-button.icon-button::part(button) {
+  height: 28px;
+  min-width: 25px;
+  border-radius: 4px;
   background: none;
   border: 0;
   color: var(--ink);
@@ -184,8 +203,8 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
+  outline: var(--wa-focus-ring);
+  outline-offset: var(--wa-focus-ring-offset);
 }
 button {
   color: inherit;
