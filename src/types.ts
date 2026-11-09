@@ -22,6 +22,7 @@ export type Part = {
   progress: Progress;
   opened: number;
 };
+export const isFrontmatter = (part: Part) => part.id === "frontmatter";
 export type Collection = { enabled: boolean; parts: Part[] };
 export type ReadingStatus = "unread" | "reading" | "finished";
 export type Details = {

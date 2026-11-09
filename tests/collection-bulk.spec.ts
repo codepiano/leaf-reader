@@ -99,7 +99,7 @@ test("bulk actions target the displayed sibling layer, remove overlaps, and clea
     .click();
   await select.click();
   await page.locator("#collection-apply").click();
-  await expect(page.locator(".book-card")).toHaveCount(4);
+  await expect(page.locator(".book-card")).toHaveCount(3);
   const ids = await page.evaluate(
     () =>
       (window as any).__mockCommands

@@ -9,6 +9,7 @@ import {
   type Snapshot,
   type ShelfItem,
   emptyMeta,
+  isFrontmatter,
   escapeHTML as esc,
 } from "./types";
 
@@ -56,7 +57,7 @@ export class Shelf {
     );
     $(".shelf-heading").insertAdjacentHTML(
       "afterend",
-      '<div class="shelf-tools"><input id="shelf-search" class="field-input" type="search" aria-label="搜索书籍、作者和标签" placeholder="搜索书名、作者、标签…"><label class="shelf-sort">排序<wa-select id="shelf-sort" aria-label="书架排序" size="s"><wa-option value="recent">最近阅读时间</wa-option><wa-option value="title">书名</wa-option><wa-option value="author">作者</wa-option></wa-select></label><wa-button id="manage-groups" class="quiet-button" size="s">管理分组</wa-button></div><p id="filter-empty" class="filter-empty" hidden>这里还没有书籍。</p>',
+      '<div class="shelf-tools"><input id="shelf-search" class="field-input" type="search" aria-label="搜索书籍、作者和标签" placeholder="搜索书名、作者、标签…"><label class="shelf-sort">排序<wa-select id="shelf-sort" aria-label="书架排序" size="s"><wa-option value="recent">最近阅读时间</wa-option><wa-option value="title">书名</wa-option><wa-option value="author">作者</wa-option></wa-select></label><wa-button id="manage-groups" class="quiet-button" size="s">管理分组</wa-button></div><section id="collection-extras" class="collection-extras" aria-label="合集附加内容" hidden></section><p id="filter-empty" class="filter-empty" hidden>这里还没有书籍。</p>',
     );
     initShelfSize();
     $("#shelf-sort").addEventListener("change", () => {
@@ -142,19 +143,21 @@ export class Shelf {
   items(): ShelfItem[] {
     return this.data.books.flatMap<ShelfItem>((r) =>
       r.collection?.enabled
-        ? r.collection.parts.map((p) => ({
-            key: `${r.id}::${p.id}`,
-            sourceId: r.id,
-            partId: p.id,
-            path: r.path,
-            title: p.title,
-            author: r.part_metadata?.[p.id]?.details?.author || r.author,
-            sourceTitle: r.title,
-            chapters: p.chapters,
-            progress: p.progress,
-            opened: p.opened,
-            metadata: normalizedMeta(r.part_metadata?.[p.id], p.opened),
-          }))
+        ? r.collection.parts
+            .filter((p) => !isFrontmatter(p))
+            .map((p) => ({
+              key: `${r.id}::${p.id}`,
+              sourceId: r.id,
+              partId: p.id,
+              path: r.path,
+              title: p.title,
+              author: r.part_metadata?.[p.id]?.details?.author || r.author,
+              sourceTitle: r.title,
+              chapters: p.chapters,
+              progress: p.progress,
+              opened: p.opened,
+              metadata: normalizedMeta(r.part_metadata?.[p.id], p.opened),
+            }))
         : [
             {
               key: r.id,
@@ -241,7 +244,12 @@ export class Shelf {
       this.data.books
         .filter((r) => r.collection?.enabled)
         .map((r) =>
-          filterButton("collection", r.id, r.title, r.collection.parts.length),
+          filterButton(
+            "collection",
+            r.id,
+            r.title,
+            r.collection.parts.filter((p) => !isFrontmatter(p)).length,
+          ),
         )
         .join("") ||
       '<span class="sidebar-note">打开书籍后可切换合集模式</span>';
@@ -292,6 +300,18 @@ export class Shelf {
       );
     list.sort((a, b) => compareBooks(this.sort, a, b));
     const source = this.data.books.find((r) => r.id === this.filter.value);
+    const frontmatter =
+      this.filter.kind === "collection" && source?.collection.enabled
+        ? source.collection.parts.find(isFrontmatter)
+        : undefined;
+    const extras = $("#collection-extras");
+    extras.hidden = !frontmatter;
+    extras.innerHTML = frontmatter
+      ? `<span>合集附加内容</span><wa-button id="collection-frontmatter-open" class="quiet-button" size="s">${esc(frontmatter.title)}</wa-button><small>保留首本子书之前的内容，不计为单本</small>`
+      : "";
+    if (frontmatter && source)
+      $("#collection-frontmatter-open").onclick = () =>
+        this.open(source.path, frontmatter.id);
     const title =
       this.filter.kind === "status"
         ? statusTitle(this.filter.value!)

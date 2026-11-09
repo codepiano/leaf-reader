@@ -129,7 +129,7 @@ $("#app").innerHTML = `
 
 document.body.insertAdjacentHTML(
   "beforeend",
-  `<dialog id="collection-dialog" class="app-dialog collection-dialog"><div class="dialog-heading"><div><div class="eyebrow">合集模式</div><h2>选择要作为子书的目录</h2></div><wa-button id="collection-close" class="icon-button" aria-label="关闭合集设置" size="s">×</wa-button></div><p class="dialog-description">逻辑拆分，共用原 EPUB；每本子书单独记录进度。不会生成或改写 EPUB 文件。</p><p class="field-hint">默认只展示第一层，点击箭头逐级展开。勾选子书的起始分组；未链接的标题将使用其第一段正文作为起点。首个起点之前的内容会保留为“卷首内容”。</p><div id="collection-candidates"></div><p id="collection-selection" class="field-hint"></p><p id="collection-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="collection-disable" class="quiet-button" size="s" hidden>恢复整本阅读</wa-button><wa-button id="collection-apply" class="primary-button" size="s">转为合集模式</wa-button></div></dialog>`,
+  `<dialog id="collection-dialog" class="app-dialog collection-dialog"><div class="dialog-heading"><div><div class="eyebrow">合集模式</div><h2>选择要作为子书的目录</h2></div><wa-button id="collection-close" class="icon-button" aria-label="关闭合集设置" size="s">×</wa-button></div><p class="dialog-description">逻辑拆分，共用原 EPUB；每本子书单独记录进度。不会生成或改写 EPUB 文件。</p><p class="field-hint">默认只展示第一层，点击箭头逐级展开。勾选子书的起始分组；未链接的标题将使用其第一段正文作为起点。首个起点之前的内容保留在合集“附加内容”中，不计为子书。</p><div id="collection-candidates"></div><p id="collection-selection" class="field-hint"></p><p id="collection-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="collection-disable" class="quiet-button" size="s" hidden>恢复整本阅读</wa-button><wa-button id="collection-apply" class="primary-button" size="s">转为合集模式</wa-button></div></dialog>`,
 );
 const shelf = new Shelf(
   (path, partId) => void openPath(path, false, partId, true),

@@ -61,7 +61,7 @@ test("picker starts with only the first level and folding preserves selections a
     path: "test-results/collection-picker-collapsed.png",
   });
   await page.locator("#collection-apply").click();
-  await expect(page.locator(".book-card")).toHaveCount(4);
+  await expect(page.locator(".book-card")).toHaveCount(3);
   const selected = await page.evaluate(
     () =>
       (window as any).__mockCommands

@@ -1,4 +1,4 @@
-import { type Book, type Toc, escapeHTML as esc } from "./types";
+import { type Book, type Toc, isFrontmatter, escapeHTML as esc } from "./types";
 export const walkToc = (nodes: Toc[]): Toc[] =>
   nodes.flatMap((n) => [n, ...walkToc(n.children)]);
 export class TocTree {
@@ -65,8 +65,8 @@ export class TocTree {
           .map((p) =>
             disclosure(
               `part-${p.id}`,
-              p.title,
-              `<button class="toc-part-open" data-part="${esc(p.id)}">${p.id === book.part_id ? "继续阅读" : "打开此书"}</button>` +
+              isFrontmatter(p) ? `${p.title} · 附加内容` : p.title,
+              `<button class="toc-part-open" data-part="${esc(p.id)}">${p.id === book.part_id ? "继续阅读" : isFrontmatter(p) ? "查看内容" : "打开此书"}</button>` +
                 (p.id === book.part_id ? nodes(roots) : ""),
               p.id === book.part_id ? "current-part" : "",
             ),

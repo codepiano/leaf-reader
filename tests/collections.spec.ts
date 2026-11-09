@@ -8,7 +8,7 @@ async function convert(page: import("@playwright/test").Page) {
   );
   await page.locator("#collection-apply").click();
   await expect(page.locator("#collection-dialog")).toBeHidden();
-  await expect(page.locator(".book-card")).toHaveCount(4);
+  await expect(page.locator(".book-card")).toHaveCount(3);
 }
 
 test("unlinked tree headings collapse, logical books clip shared files, progress and mode survive reopen", async ({
@@ -86,7 +86,7 @@ test("unlinked tree headings collapse, logical books clip shared files, progress
   await expect(page.locator("#book-count")).toHaveText("1");
   await convert(page);
   await page.reload();
-  await expect(page.locator(".book-card")).toHaveCount(4);
+  await expect(page.locator(".book-card")).toHaveCount(3);
   await b.click();
   await expect(frame.locator("h1")).toHaveText("散步");
   await expect
