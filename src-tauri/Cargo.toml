@@ -1,6 +1,6 @@
 [package]
 name = "leaf-reader"
-version = "0.1.2"
+version = "0.1.3"
 description = "A small, local-first EPUB reader"
 edition = "2021"
 
