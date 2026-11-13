@@ -1,4 +1,11 @@
-export type Progress = { chapter: number; fraction: number };
+export type Progress = {
+  chapter: number;
+  fraction: number;
+  book_fraction?: number;
+};
+
+export const readingPercent = (fraction: number) =>
+  Math.floor(Math.max(0, Math.min(1, fraction)) * 100);
 export type Chapter = {
   title: string;
   path: string;
@@ -67,6 +74,7 @@ export type Book = {
   source_title: string;
   author: string;
   chapters: Chapter[];
+  progress_weights: number[];
   toc: Toc[];
   progress: Progress;
   collection: Collection;

@@ -6,12 +6,15 @@
   const send = (type, data = {}) =>
     parent.postMessage({ leaf: true, channel, type, ...data }, "*");
   let restoring = false;
+  let finalSection = false;
   let observer;
   let timer;
   let raf;
   const fraction = () => {
     const max = document.documentElement.scrollHeight - innerHeight;
-    return max > 1 ? Math.max(0, Math.min(1, scrollY / max)) : 0;
+    if (max <= 1) return finalSection ? 1 : 0;
+    if (scrollY > 0 && max - scrollY <= 1) return 1;
+    return Math.max(0, Math.min(1, scrollY / max));
   };
   const position = () => send("position", { fraction: fraction() });
   const stopRestore = () => {
@@ -41,6 +44,7 @@
     if (e.source !== parent || e.data?.channel !== channel) return;
     const m = e.data;
     if (m.type === "init") {
+      finalSection = m.finalSection === true;
       restore(m.fraction, m.fragment);
       send("initialized");
     } else if (m.type === "snapshot") {

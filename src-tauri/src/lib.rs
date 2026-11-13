@@ -24,6 +24,8 @@ use tauri::Manager;
 pub struct Progress {
     pub chapter: usize,
     pub fraction: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub book_fraction: Option<f64>,
 }
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -80,6 +82,7 @@ struct Session {
     id: String,
     book: Book,
     view_chapters: Vec<Chapter>,
+    progress_weights: Vec<u64>,
     part_id: Option<String>,
 }
 struct ReaderState {
@@ -97,6 +100,7 @@ struct Opened {
     source_title: String,
     author: String,
     chapters: Vec<Chapter>,
+    progress_weights: Vec<u64>,
     toc: Vec<TocEntry>,
     progress: Progress,
     collection: Collection,
@@ -227,6 +231,11 @@ fn make_opened(
     } else {
         0.
     };
+    session.progress_weights = if collection.enabled && part.is_none() {
+        Vec::new()
+    } else {
+        epub::progress_weights(&mut session.book.archive, &chapters)
+    };
     session.view_chapters = chapters.clone();
     session.part_id = part_id.map(str::to_string);
     session.token = token();
@@ -266,6 +275,7 @@ fn make_opened(
         source_title,
         author,
         chapters,
+        progress_weights: session.progress_weights.clone(),
         toc,
         progress,
         collection: display_collection,
@@ -428,6 +438,7 @@ fn open_scoped_from(
         id,
         book,
         view_chapters: Vec::new(),
+        progress_weights: Vec::new(),
         part_id: None,
     };
     let opened = make_opened(&mut session, &next, part_id)?;
@@ -569,9 +580,15 @@ fn write_progress(
         return Ok(());
     }
     let mut next = library.clone();
+    let fraction = fraction.clamp(0., 1.);
+    let weights = &s.progress_weights;
     let progress = Progress {
         chapter,
-        fraction: fraction.clamp(0., 1.),
+        fraction,
+        book_fraction: weights.get(chapter).map(|weight| {
+            let before = weights[..chapter].iter().sum::<u64>() as f64;
+            (before + *weight as f64 * fraction) / weights.iter().sum::<u64>() as f64
+        }),
     };
     if let Some(id) = &s.part_id {
         let part = next
@@ -945,6 +962,7 @@ mod tests {
             library.recent[0].progress = Progress {
                 chapter: 1,
                 fraction: 0.42,
+                book_fraction: None,
             };
             persist(&state, &library).unwrap();
         }

@@ -101,6 +101,87 @@ pub(crate) fn parse_xml(source: &str) -> Result<Document<'_>, roxmltree::Error> 
         },
     )
 }
+// Bound the amount of text decompressed when opening large EPUBs. Unmeasured
+// chapters use an estimate based on the ratio observed in the measured chapters.
+pub(crate) fn progress_weights(archive: &mut ZipArchive<File>, chapters: &[Chapter]) -> Vec<u64> {
+    const CHAPTER_LIMIT: u64 = 8 * 1024 * 1024;
+    let mut remaining = 16 * 1024 * 1024;
+    let mut measured_bytes = 0;
+    let mut measured_chars = 0;
+    let estimates: Vec<_> = chapters
+        .iter()
+        .map(|chapter| {
+            let size = archive.by_name(&chapter.path).map_or(0, |file| file.size());
+            if size == 0 || size > remaining || size > CHAPTER_LIMIT {
+                return (size, None);
+            }
+            remaining -= size;
+            let count = read(archive, &chapter.path, CHAPTER_LIMIT)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+                .and_then(|source| chapter_text_length(&source, chapter));
+            if let Some(chars) = count {
+                if chapter.start_fragment.is_empty() && chapter.end_fragment.is_empty() {
+                    measured_bytes += size;
+                    measured_chars += chars;
+                }
+            }
+            (size, count)
+        })
+        .collect();
+    estimates
+        .into_iter()
+        .map(|(size, count)| {
+            count
+                .unwrap_or_else(|| {
+                    // Avoid integer overflow for a corrupt ZIP entry with an oversized claim.
+                    let size = size.min(CHAPTER_LIMIT);
+                    if measured_bytes == 0 {
+                        size / 4
+                    } else {
+                        size * measured_chars / measured_bytes
+                    }
+                })
+                .max(1)
+        })
+        .collect()
+}
+
+fn chapter_text_length(source: &str, chapter: &Chapter) -> Option<u64> {
+    let doc = parse_xml(source).ok()?;
+    let body = doc.descendants().find(|node| node.has_tag_name("body"))?;
+    let anchor_offset = |fragment: &str, default| {
+        if fragment.is_empty() {
+            Some(default)
+        } else {
+            body.descendants()
+                .find(|n| {
+                    n.attribute("id") == Some(fragment)
+                        || n.attribute(("http://www.w3.org/XML/1998/namespace", "id"))
+                            == Some(fragment)
+                        || n.attribute("name") == Some(fragment)
+                })
+                .map(|n| n.range().start)
+        }
+    };
+    let start = anchor_offset(&chapter.start_fragment, body.range().start)?;
+    let end = anchor_offset(&chapter.end_fragment, body.range().end)?;
+    Some(
+        body.descendants()
+            .filter(|n| n.range().start >= start && n.range().start < end)
+            .filter(|n| {
+                n.is_text()
+                    && !n
+                        .ancestors()
+                        .any(|p| p.has_tag_name("script") || p.has_tag_name("style"))
+            })
+            .filter_map(|n| n.text())
+            .flat_map(str::chars)
+            .filter(|c| !c.is_whitespace())
+            .count() as u64,
+    )
+}
+
 fn words(value: &str, word: &str) -> bool {
     value.split_whitespace().any(|v| v == word)
 }
@@ -377,6 +458,29 @@ pub fn walk_toc(toc: &[TocEntry]) -> Vec<&TocEntry> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn reading_weights_count_only_the_selected_body_text() {
+        let source = r#"<html xmlns="http://www.w3.org/1999/xhtml">
+          <head><title>Ignored metadata</title></head>
+          <body><p>扉页</p><p id="part">章 &amp; 节</p>
+          <script>ignored</script><p>正文</p><p id="next">下一卷</p></body>
+        </html>"#;
+        let chapter = Chapter {
+            title: String::new(),
+            path: String::new(),
+            start_fragment: "part".into(),
+            end_fragment: "next".into(),
+        };
+        assert_eq!(chapter_text_length(source, &chapter), Some(5));
+        let whole = Chapter {
+            start_fragment: String::new(),
+            end_fragment: String::new(),
+            ..chapter
+        };
+        assert_eq!(chapter_text_length(source, &whole), Some(10));
+    }
+
     fn fixture(opf: &str, extra: &[(&str, &str)]) -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!(
             "leaf-test-{}.epub",

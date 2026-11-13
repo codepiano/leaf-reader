@@ -26,9 +26,11 @@ export async function mockDesktop(
   anthology = false,
   both = false,
   coverMode: "none" | "slow" | "good" | "broken" = "none",
+  sampleWeights?: number[],
 ) {
   await page.addInitScript(
-    ({ catalog, files, malicious, broken, anthology, both }) => {
+    ({ catalog, files, malicious, broken, anthology, both, sampleWeights }) => {
+      if (sampleWeights) catalog.sample.progress_weights = sampleWeights;
       const copy = (v: any) => JSON.parse(JSON.stringify(v));
       const meta = () => ({
         group: "",
@@ -357,6 +359,13 @@ export async function mockDesktop(
                   ? r.collection.parts.find((p: any) => p.id === active.part_id)
                   : r;
               p.progress = { chapter: args.chapter, fraction: args.fraction };
+              const weights: number[] | undefined = active.progress_weights;
+              if (weights?.length) {
+                const before = weights.slice(0, args.chapter).reduce((a, b) => a + b, 0);
+                const total = weights.reduce((a, b) => a + b, 0);
+                p.progress.book_fraction =
+                  (before + weights[args.chapter] * args.fraction) / total;
+              }
               save(s);
               return;
             }
@@ -445,7 +454,7 @@ export async function mockDesktop(
         },
       });
     },
-    { catalog, files, malicious, broken, anthology, both },
+    { catalog, files, malicious, broken, anthology, both, sampleWeights },
   );
   await page.route("http://epub.localhost/**", async (route) => {
     const coverPath = new URL(route.request().url()).pathname;

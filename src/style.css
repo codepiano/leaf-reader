@@ -890,15 +890,23 @@ p {
   width: 150px;
 }
 .progress-track {
-  height: 2px;
-  margin-top: 10px;
+  appearance: none;
+  display: block;
+  inline-size: 100%;
+  block-size: 2px;
+  margin-block-start: 10px;
+  border: 0;
   background: var(--line);
   border-radius: 2px;
-  overflow: hidden;
+  overflow: clip;
 }
-.progress-track span {
-  height: 100%;
-  display: block;
+.progress-track::-webkit-progress-bar {
+  background: transparent;
+}
+.progress-track::-webkit-progress-value {
+  background: var(--accent);
+}
+.progress-track::-moz-progress-bar {
   background: var(--accent);
 }
 .settings-panel {

@@ -11,7 +11,7 @@ import type WaButton from "@awesome.me/webawesome/dist/components/button/button.
 import "./style.css";
 import {
   type Book,
-  type Progress,
+  readingPercent,
   type Chapter,
   type Toc,
   escapeHTML,
@@ -59,6 +59,7 @@ let settings = loadSettings();
 let book: Book | null = null;
 let chapter = 0;
 let fraction = 0;
+let progressOffsets: number[] = [];
 let busy = false;
 let loadingChapter = false;
 let revision = 0;
@@ -128,7 +129,7 @@ $("#app").innerHTML = `
       <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB 2 / 3</span></footer>
     </section>
     <div id="reader-workspace" hidden>
-    <section id="reader-view" class="reader-view"><div class="reader-caption"><span id="chapter-caption"></span><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div><div id="chapter-loading" class="chapter-loading" hidden>正在打开章节…</div><iframe id="reader" title="书籍正文" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe><footer class="reader-footer"><wa-button id="prev" class="quiet-button" size="small">${icon("left")}上一章</wa-button><div><span id="position"></span><div class="progress-track"><span id="progress-fill"></span></div></div><wa-button id="next" class="quiet-button" size="small">下一章${icon("right")}</wa-button></footer></section>
+    <section id="reader-view" class="reader-view"><div class="reader-caption"><span id="chapter-caption"></span><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div><div id="chapter-loading" class="chapter-loading" hidden>正在打开章节…</div><iframe id="reader" title="书籍正文" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe><footer class="reader-footer"><wa-button id="prev" class="quiet-button" size="small">${icon("left")}上一章</wa-button><div><span id="position"></span><progress id="reading-progress" class="progress-track" max="100" value="0" aria-label="阅读进度"></progress></div><wa-button id="next" class="quiet-button" size="small">下一章${icon("right")}</wa-button></footer></section>
     <aside id="toc-panel" aria-labelledby="toc-title" hidden>
       <div id="toc-resize" role="separator" tabindex="0" aria-labelledby="toc-title" aria-orientation="vertical" aria-controls="toc-panel" title="拖动调整目录宽度"></div>
       <header class="toc-header"><div class="toc-heading"><h2 id="toc-title">本书目录</h2><span id="toc-count"></span></div><div class="toc-actions">
@@ -296,9 +297,6 @@ function setBusy(value: boolean) {
     $<WaButton>(`#${id}`).disabled = value;
   document.body.classList.toggle("busy", value);
 }
-function overall(p: Progress, count: number) {
-  return Math.round(((p.chapter + p.fraction) / Math.max(1, count)) * 100);
-}
 async function refreshShelf(invalidateCovers = false) {
   await shelf.refresh(invalidateCovers);
 }
@@ -362,6 +360,7 @@ window.addEventListener("message", (e) => {
     sendReader("init", {
       fraction: handshake.fraction,
       fragment: handshake.fragment,
+      finalSection: chapter === book.chapters.length - 1,
     });
   else if (m.type === "initialized" && handshake) {
     readerReady = true;
@@ -419,10 +418,14 @@ window.addEventListener("message", (e) => {
 });
 function updatePosition() {
   if (!book) return;
+  const start = progressOffsets[chapter];
+  const weight = progressOffsets[chapter + 1] - start;
+  const progress = readingPercent(
+    (start + fraction * weight) / progressOffsets.at(-1)!,
+  );
   $("#position").textContent =
-    `${chapter + 1} / ${book.chapters.length} 章 · ${overall({ chapter, fraction }, book.chapters.length)}%`;
-  $("#progress-fill").style.width =
-    `${overall({ chapter, fraction }, book.chapters.length)}%`;
+    `${chapter + 1} / ${book.chapters.length} 节 · ${progress}%`;
+  $<HTMLProgressElement>("#reading-progress").value = progress;
   $<WaButton>("#prev").disabled = loadingChapter || chapter === 0;
   $<WaButton>("#next").disabled =
     loadingChapter || chapter >= book.chapters.length - 1;
@@ -476,6 +479,10 @@ async function presentBook(opened: Book) {
     $("#breadcrumb").textContent = `合集 / ${book.title}`;
     document.title = `${book.title} · Leaf`;
     return;
+  }
+  progressOffsets = [0];
+  for (let i = 0; i < book.chapters.length; i++) {
+    progressOffsets.push(progressOffsets[i] + (book.progress_weights?.[i] ?? 1));
   }
   setReadingView(true);
   $("#library-nav").classList.remove("active");
