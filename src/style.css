@@ -699,18 +699,111 @@ p {
   display: flex;
   justify-content: space-between;
 }
+#reader-workspace {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-block-size: 0;
+}
 #toc-panel {
-  min-height: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  margin-bottom: 20px;
+  flex: 0 0 var(--toc-width);
+  min-block-size: 0;
+  min-inline-size: 0;
+  background: var(--panel);
+  border-inline-start: 1px solid var(--line);
+}
+#toc-panel[data-mode="floating"] {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inline-size: var(--toc-width);
+  z-index: 3;
+  box-shadow: -12px 0 32px #0002;
+}
+#toc-resize {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -6px;
+  inline-size: 11px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+  outline-offset: -2px;
+}
+#toc-resize:focus-visible {
+  outline: var(--wa-focus-ring);
+}
+#toc-resize::after {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(50% - 16px);
+  inset-inline-start: 4px;
+  inline-size: 3px;
+  block-size: 32px;
+  border-radius: 3px;
+  background: var(--muted);
+  opacity: 0.4;
+}
+#toc-resize:is(:hover, :focus-visible)::after,
+.resizing-toc #toc-resize::after {
+  background: var(--accent);
+  opacity: 1;
+}
+.resizing-toc {
+  cursor: col-resize;
+  user-select: none;
+}
+.resizing-toc iframe {
+  pointer-events: none;
+}
+.toc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 12px 16px;
+  border-block-end: 1px solid var(--line);
+}
+.toc-heading,
+.toc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toc-actions .icon-button {
+  display: grid;
+  place-items: center;
+  min-inline-size: 28px;
+  min-block-size: 28px;
+}
+.toc-actions .icon-button:hover {
+  background: var(--hover);
+}
+.toc-heading h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+#toc-count {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+#toc-pin[aria-pressed="true"],
+#toc-toggle[aria-expanded="true"] {
+  color: var(--accent);
+  background: var(--hover);
 }
 .toc {
   overflow: auto;
-  min-height: 0;
-  margin: 0 -9px;
-  padding: 4px 9px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  min-block-size: 0;
+  flex: 1;
+  padding: 6px 10px 18px 12px;
 }
 .toc button {
   width: 100%;
@@ -722,7 +815,6 @@ p {
   font-size: 12px;
   color: var(--muted);
   border-radius: 5px;
-  padding: 10px 9px 10px calc(9px + var(--depth) * 10px);
 }
 .toc-ordinal {
   font-size: 9px;
@@ -742,6 +834,7 @@ p {
 }
 .reader-view {
   flex: 1;
+  min-inline-size: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -756,6 +849,7 @@ p {
   gap: 20px;
 }
 .reader-caption > span {
+  min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -969,7 +1063,10 @@ select {
     padding-right: 20px;
   }
   .topbar {
-    padding: 0 26px;
+    padding: 0 20px;
+  }
+  .top-actions {
+    gap: 10px;
   }
   .library-view {
     padding: 18px 26px 0;

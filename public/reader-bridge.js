@@ -64,7 +64,10 @@
     { passive: true },
   );
   addEventListener("wheel", stopRestore, { passive: true });
-  addEventListener("pointerdown", stopRestore);
+  addEventListener("pointerdown", () => {
+    stopRestore();
+    send("pointerdown");
+  });
   document.addEventListener("click", (e) => {
     const element = e.target.nodeType === 1 ? e.target : e.target.parentElement;
     const link = element?.closest("a[href]");

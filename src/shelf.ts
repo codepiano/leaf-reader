@@ -52,7 +52,7 @@ export class Shelf {
         "beforeend",
         `<button id="recent-nav" class="nav-item">${icon("book")}<span>最近阅读</span></button><button id="favorites-nav" class="nav-item"><span class="nav-star">☆</span><span>我的收藏</span><span id="favorite-count" class="count">0</span></button>`,
       );
-    $("#toc-panel").insertAdjacentHTML(
+    $(".sidebar-bottom").insertAdjacentHTML(
       "beforebegin",
       '<div class="library-sections"><div class="section-label">阅读分类</div><div id="reading-status-list" class="filter-list"></div><div class="section-label">书籍分组<button id="new-group" class="small-action" aria-label="新建分组">+</button></div><div id="group-list" class="filter-list"></div><div class="section-label">合集</div><div id="collection-list" class="filter-list"></div><div class="section-label">标签</div><div id="tag-list" class="tag-filter-list"></div></div>',
     );

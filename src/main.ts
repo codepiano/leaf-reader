@@ -19,6 +19,7 @@ import {
 import { Shelf, type Filter } from "./shelf";
 import { CollectionPicker } from "./collection-picker";
 import { TocTree } from "./toc";
+import { TocSidebar } from "./toc-sidebar";
 import { initScanDirectories } from "./scan-directories";
 import { ReadingClock } from "./reading-clock";
 import { initBookInfo, showBookInfo } from "./book-info";
@@ -95,6 +96,7 @@ const icon = (name: string, cls = "") => {
     right: '<path d="m10 6 6 6-6 6"/>',
     arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
+    pin: '<path d="m15 4 5 5-3 1-3 4v3l-7-7h3l4-3 1-3ZM10.5 13.5 5 19"/>',
     folder: '<path d="M3 7V5h6l2 2h10v13H3Zm0 4h18"/>',
   };
   return `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ""}</svg>`;
@@ -115,18 +117,27 @@ $("#app").innerHTML = `
     <a class="brand" href="#" aria-label="Leaf 书架">${icon("leaf")}<span>Leaf<span class="brand-dot">.</span></span></a>
     <div class="sidebar-caption">你的私人阅读空间</div>
     <nav><button id="library-nav" class="nav-item active">${icon("grid")}<span>我的书架</span><span id="book-count" class="count">0</span></button></nav>
-    <section id="toc-panel" hidden><div class="section-label">本书目录 <span id="toc-count"></span></div><div id="toc" class="toc"></div></section>
     <div class="sidebar-bottom"><div class="local-badge"><span></span>本地存储 · 离线可用</div><p>给阅读，留一点空间。</p><span class="version">LEAF READER / 0.1</span></div>
   </aside>
   <main>
-    <header class="topbar"><div id="breadcrumb">书架 <span>/</span> 全部书籍</div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开 EPUB</wa-button></div></header>
+    <header class="topbar"><div id="breadcrumb">书架 <span>/</span> 全部书籍</div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><button type="button" id="toc-toggle" class="quiet-button" aria-label="本书目录" title="本书目录" aria-expanded="false" aria-controls="toc-panel" hidden>${icon("list")}<span>目录</span></button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开 EPUB</wa-button></div></header>
     <section id="library-view" class="library-view">
       <div class="shelf-heading"><h2>我的书架 <span id="shelf-count">0 本</span></h2><span class="muted">最近阅读</span></div>
       <div id="shelf" class="shelf"></div>
       <div id="empty" class="empty-state"><div class="empty-art">${icon("book")}<span class="art-leaf">${icon("leaf")}</span></div><h2>下一段旅程，从这里开始</h2><p>打开一本 EPUB，把喜欢的文字放在手边。<br>也可以将文件拖到窗口中。</p><wa-button id="empty-open" class="primary-button" size="small">${icon("folder")}选择本地书籍</wa-button><wa-button id="demo" class="text-button" size="small">先读一段示例 ${icon("arrow")}</wa-button><div class="empty-foot">无需账号 · 无需联网 · 只专注阅读</div></div>
       <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB 2 / 3</span></footer>
     </section>
-    <section id="reader-view" class="reader-view" hidden><div class="reader-caption"><span id="chapter-caption"></span><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div><div id="chapter-loading" class="chapter-loading" hidden>正在打开章节…</div><iframe id="reader" title="书籍正文" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe><footer class="reader-footer"><wa-button id="prev" class="quiet-button" size="small">${icon("left")}上一章</wa-button><div><span id="position"></span><div class="progress-track"><span id="progress-fill"></span></div></div><wa-button id="next" class="quiet-button" size="small">下一章${icon("right")}</wa-button></footer></section>
+    <div id="reader-workspace" hidden>
+    <section id="reader-view" class="reader-view"><div class="reader-caption"><span id="chapter-caption"></span><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div><div id="chapter-loading" class="chapter-loading" hidden>正在打开章节…</div><iframe id="reader" title="书籍正文" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe><footer class="reader-footer"><wa-button id="prev" class="quiet-button" size="small">${icon("left")}上一章</wa-button><div><span id="position"></span><div class="progress-track"><span id="progress-fill"></span></div></div><wa-button id="next" class="quiet-button" size="small">下一章${icon("right")}</wa-button></footer></section>
+    <aside id="toc-panel" aria-labelledby="toc-title" hidden>
+      <div id="toc-resize" role="separator" tabindex="0" aria-labelledby="toc-title" aria-orientation="vertical" aria-controls="toc-panel" title="拖动调整目录宽度"></div>
+      <header class="toc-header"><div class="toc-heading"><h2 id="toc-title">本书目录</h2><span id="toc-count"></span></div><div class="toc-actions">
+        <button type="button" id="toc-pin" class="icon-button" aria-label="固定目录" aria-pressed="true">${icon("pin")}</button>
+        <button type="button" id="toc-close" class="icon-button" aria-label="收起目录" title="收起目录">${icon("close")}</button>
+      </div></header>
+      <nav id="toc" class="toc" aria-label="目录条目"></nav>
+    </aside>
+    </div>
     <section id="settings-panel" class="settings-panel" aria-label="阅读设置" hidden><div class="settings-title"><h2>阅读设置</h2><wa-button id="settings-close" class="icon-button" aria-label="关闭设置" size="small">${icon("close")}</wa-button></div><label>字体大小 <output id="size-value"></output><wa-slider id="font-size" aria-label="字体大小" min="14" max="30" step="1"></wa-slider></label><label>行间距 <output id="line-value"></output><wa-slider id="line-height" aria-label="行间距" min="1.4" max="2.4" step="0.1"></wa-slider></label><label>阅读宽度 <output id="width-value"></output><wa-slider id="reading-width" aria-label="阅读宽度" min="480" max="900" step="20"></wa-slider></label><label class="select-label">正文字体<wa-select id="font-family" aria-label="正文字体" size="small"><wa-option value="serif">宋体 / 衬线字体</wa-option><wa-option value="sans">黑体 / 无衬线字体</wa-option></wa-select></label><div class="field-label">阅读背景</div><div class="themes"><button data-theme="paper" class="theme-swatch paper">暖纸</button><button data-theme="white" class="theme-swatch white">素白</button><button data-theme="night" class="theme-swatch night">夜读</button></div><p class="settings-note">设置自动保存，仅存于本机。</p></section>
   </main><div id="toast" role="status" hidden></div><div id="drop-overlay" hidden>${icon("book")}放下 EPUB，开始阅读</div>`;
 
@@ -176,11 +187,8 @@ initBookInfo(
         ? `${book.source_title} / ${book.title}`
         : `阅读 / ${book.title}`;
       document.title = `${book.title} · Leaf`;
-      tocTree.render(
-        book,
-        (c, f = 0, anchor = "") => void navigate(c, f, anchor),
-        (id) => void openPath(book!.path, false, id),
-      );
+      tocTree.render(book, navigateFromToc, openPartFromToc);
+      tocTree.active(chapter);
     }
   },
 );
@@ -188,6 +196,27 @@ $("#book-info").onclick = () => {
   if (book) void showBookInfo(book.id, book.part_id);
 };
 const tocTree = new TocTree($("#toc"), $("#toc-count"));
+const tocSidebar = new TocSidebar(
+  $("#toc-panel"),
+  $("#toc-toggle"),
+  $("#toc-pin"),
+  $("#toc-close"),
+  $("#toc-resize"),
+);
+function setReadingView(reading: boolean) {
+  $("#reader-workspace").hidden = !reading;
+  $("#library-view").hidden = reading;
+  document.body.classList.toggle("reading", reading);
+  tocSidebar.setReading(reading);
+}
+function navigateFromToc(c: number, f = 0, anchor = "") {
+  tocSidebar.dismissTemporary(true);
+  void navigate(c, f, anchor);
+}
+function openPartFromToc(id: string) {
+  tocSidebar.dismissTemporary(true);
+  void openPath(book!.path, false, id);
+}
 $("#collection-close").onclick = () =>
   $<HTMLDialogElement>("#collection-dialog").close();
 $("#collection-mode").onclick = () => void collectionDialog();
@@ -364,7 +393,8 @@ window.addEventListener("message", (e) => {
   } else if (m.type === "navigate" && (m.direction === -1 || m.direction === 1))
     void navigate(chapter + m.direction);
   else if (m.type === "open") void pickBook();
-  else if (m.type === "escape") void toggleSettings(false);
+  else if (m.type === "escape") closeReaderOverlay();
+  else if (m.type === "pointerdown") tocSidebar.dismissTemporary();
   else if (m.type === "link" && typeof m.href === "string") {
     try {
       const url = new URL(m.href, chapterBase);
@@ -441,29 +471,19 @@ async function presentBook(opened: Book) {
   await refreshShelf();
   if (book.collection.enabled && !book.part_id) {
     $<HTMLIFrameElement>("#reader").srcdoc = "";
-    $("#reader-view").hidden = true;
-    $("#library-view").hidden = false;
-    $("#toc-panel").hidden = true;
-    document.body.classList.remove("reading");
+    setReadingView(false);
     shelf.select({ kind: "collection", value: book.id });
     $("#breadcrumb").textContent = `合集 / ${book.title}`;
     document.title = `${book.title} · Leaf`;
     return;
   }
-  $("#library-view").hidden = true;
-  $("#reader-view").hidden = false;
-  $("#toc-panel").hidden = false;
-  document.body.classList.add("reading");
+  setReadingView(true);
   $("#library-nav").classList.remove("active");
   $("#breadcrumb").textContent = book.part_id
     ? `${book.source_title} / ${book.title}`
     : `阅读 / ${book.title}`;
   document.title = `${book.title} · Leaf`;
-  tocTree.render(
-    book,
-    (c, f = 0, anchor = "") => void navigate(c, f, anchor),
-    (id) => void openPath(book!.path, false, id),
-  );
+  tocTree.render(book, navigateFromToc, openPartFromToc);
   await renderChapter(chapter, fraction);
 }
 async function pickBook() {
@@ -656,10 +676,7 @@ async function libraryView(filter: Filter = { kind: "all" }) {
     $("#book-info").hidden = true;
     $<HTMLIFrameElement>("#reader").srcdoc = "";
     await invoke("close_book");
-    $("#reader-view").hidden = true;
-    $("#library-view").hidden = false;
-    $("#toc-panel").hidden = true;
-    document.body.classList.remove("reading");
+    setReadingView(false);
     $("#breadcrumb").textContent = "书架 / 全部书籍";
     document.title = "Leaf · 本地阅读";
     await refreshShelf();
@@ -715,22 +732,19 @@ function applySettings() {
   localStorage.setItem("leaf.settings", JSON.stringify(settings));
 }
 function onKey(e: KeyboardEvent) {
-  if (document.querySelector("dialog[open]")) return;
+  if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
   const target = e.target as HTMLElement;
   if (
     target.matches(
       "input,select,textarea,button,summary,wa-button,wa-slider,wa-select",
     ) ||
-    target.isContentEditable
+    target.isContentEditable ||
+    target.closest("#toc-panel")
   )
     return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
     e.preventDefault();
     void pickBook();
-  }
-  if (e.key === "Escape") {
-    e.preventDefault();
-    toggleSettings(false);
   }
   if (book && !e.metaKey && !e.ctrlKey && !e.altKey) {
     if (e.key === "ArrowLeft") {
@@ -786,8 +800,17 @@ document.querySelectorAll<HTMLButtonElement>("[data-theme]").forEach(
     }),
 );
 document.addEventListener("keydown", onKey);
+function closeReaderOverlay() {
+  if (!$("#settings-panel").hidden) {
+    void toggleSettings(false);
+    return true;
+  }
+  return tocSidebar.dismissTemporary(true);
+}
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("#settings-panel").hidden) toggleSettings(false);
+  if (e.key === "Escape" && !e.defaultPrevented &&
+      !document.querySelector("dialog[open]") && closeReaderOverlay())
+    e.preventDefault();
 });
 document.addEventListener("click", (e) => {
   if (
