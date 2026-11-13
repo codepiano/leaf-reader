@@ -26,6 +26,10 @@ test("chapter navigation, anchors, local assets and saved reading position", asy
     )
     .toBe("2px");
   await expect(page.locator("#prev")).toHaveAttribute("disabled", "");
+  await expect(page.locator("#toc-count")).toHaveText("4 项");
+  await expect(page.locator("#toc .toc-ordinal", { hasText: /^\d+$/ })).toHaveText([
+    "01", "02", "03", "04",
+  ]);
   await page.locator('[data-toc="1"]').click();
   await expect
     .poll(() =>

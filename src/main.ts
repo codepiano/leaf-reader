@@ -187,7 +187,7 @@ initBookInfo(
 $("#book-info").onclick = () => {
   if (book) void showBookInfo(book.id, book.part_id);
 };
-const tocTree = new TocTree($("#toc"));
+const tocTree = new TocTree($("#toc"), $("#toc-count"));
 $("#collection-close").onclick = () =>
   $<HTMLDialogElement>("#collection-dialog").close();
 $("#collection-mode").onclick = () => void collectionDialog();
@@ -459,7 +459,6 @@ async function presentBook(opened: Book) {
     ? `${book.source_title} / ${book.title}`
     : `阅读 / ${book.title}`;
   document.title = `${book.title} · Leaf`;
-  $("#toc-count").textContent = `${book.chapters.length} 章`;
   tocTree.render(
     book,
     (c, f = 0, anchor = "") => void navigate(c, f, anchor),

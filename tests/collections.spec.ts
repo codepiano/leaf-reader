@@ -19,7 +19,8 @@ test("unlinked tree headings collapse, logical books clip shared files, progress
   await page.locator("#demo").click();
   await expect(page.locator("#chapter-loading")).toBeHidden();
   const group = page.locator('#toc details[data-node="toc-0-0"]');
-  await expect(group.locator("summary")).toHaveText("›第一本：窗边");
+  await expect(page.locator("#toc-count")).toHaveText("8 项");
+  await expect(group.locator("summary .toc-title")).toHaveText("第一本：窗边");
   await group.locator("summary").click();
   await expect(group).not.toHaveAttribute("open");
   await group.locator("summary").focus();

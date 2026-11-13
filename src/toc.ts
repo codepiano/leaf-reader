@@ -4,7 +4,10 @@ export const walkToc = (nodes: Toc[]): Toc[] =>
 export class TocTree {
   private collapsed = new Set<string>();
   private key = "";
-  constructor(private el: HTMLElement) {
+  constructor(
+    private el: HTMLElement,
+    private count: HTMLElement,
+  ) {
     el.addEventListener(
       "toggle",
       (e) => {
@@ -31,33 +34,51 @@ export class TocTree {
       this.collapsed = new Set();
     }
     const flat = walkToc(book.toc);
-    const disclosure = (
-      id: string,
-      title: string,
-      body: string,
-      classes = "",
-    ) =>
-      `<details class="toc-group ${classes}" data-node="${esc(id)}" ${this.collapsed.has(id) ? "" : "open"}><summary title="${esc(title)}"><span class="toc-chevron">›</span><span>${esc(title)}</span></summary><div class="toc-children">${body}</div></details>`;
-    const nodes = (tree: Toc[]): string =>
-      tree
-        .map((n) => {
-          const jump =
-            n.chapter !== null
-              ? `<button class="toc-item ${n.children.length ? "toc-jump" : ""}" data-chapter="${n.chapter}" data-toc="${flat.indexOf(n)}" title="${esc(n.title)}"><span>${n.children.length ? "↳" : String(n.chapter + 1).padStart(2, "0")}</span><span>${n.children.length ? "从这里阅读" : esc(n.title)}</span></button>`
-              : "";
-          return n.children.length
-            ? disclosure(n.id, n.title, jump + nodes(n.children))
-            : jump ||
-                `<div class="toc-label" title="${esc(n.title)}">${esc(n.title)}</div>`;
-        })
-        .join("");
+    const indices = new Map(flat.map((node, index) => [node, index]));
     let roots = book.toc;
-    if (book.collection.enabled && book.part_id) {
+    const readingPart = book.collection.enabled && book.part_id;
+    if (readingPart) {
       while (roots.length === 1 && roots[0].children.length) {
         const n = roots[0];
         roots = n.children;
         if (n.title === book.title) break;
       }
+    } else if (
+      roots.length === 1 &&
+      roots[0].title === book.title &&
+      roots[0].children.length
+    ) {
+      roots = roots[0].children;
+    }
+    this.count.textContent = `${walkToc(roots).length} 项`;
+    const ordinal = (number: number) =>
+      `<span class="toc-ordinal" aria-hidden="true">${String(number).padStart(2, "0")}</span>`;
+    const disclosure = (
+      id: string,
+      title: string,
+      body: string,
+      classes = "",
+      number?: number,
+    ) =>
+      `<details class="toc-group ${classes}" data-node="${esc(id)}" ${this.collapsed.has(id) ? "" : "open"}><summary title="${esc(title)}"><span class="toc-chevron" aria-hidden="true">›</span>${number === undefined ? "" : ordinal(number)}<span class="toc-title">${esc(title)}</span></summary><div class="toc-children">${body}</div></details>`;
+    let number = 0;
+    const nodes = (tree: Toc[]): string =>
+      tree
+        .map((n) => {
+          const position = ++number;
+          const title = esc(n.title);
+          const group = n.children.length > 0;
+          const jump =
+            n.chapter !== null
+              ? `<button class="toc-item ${group ? "toc-jump" : ""}" data-chapter="${n.chapter}" data-toc="${indices.get(n)}" title="${title}">${group ? '<span class="toc-ordinal" aria-hidden="true">↳</span>' : ordinal(position)}<span class="toc-title">${group ? "从这里阅读" : title}</span></button>`
+              : "";
+          return group
+            ? disclosure(n.id, n.title, jump + nodes(n.children), "", position)
+            : jump ||
+                `<div class="toc-label" title="${title}">${ordinal(position)}<span class="toc-title">${title}</span></div>`;
+        })
+        .join("");
+    if (readingPart) {
       this.el.innerHTML = disclosure(
         "root",
         book.source_title,
@@ -74,12 +95,6 @@ export class TocTree {
           .join(""),
       );
     } else {
-      if (
-        roots.length === 1 &&
-        roots[0].title === book.title &&
-        roots[0].children.length
-      )
-        roots = roots[0].children;
       this.el.innerHTML = disclosure(
         "root",
         book.source_title || book.title,
