@@ -16,10 +16,18 @@ test("EPUB continuous scrolling crosses chapter boundaries and restores the read
   await expect.poll(() => stream.evaluate((el) => el.scrollTop)).toBeGreaterThan(300);
 
   await stream.evaluate((el) => { el.scrollTop = el.scrollHeight; });
-  await expect(stream.locator("iframe").nth(1).contentFrame().locator("h1")).toHaveText("散步的意义");
-  await stream.locator("iframe").nth(1).evaluate((el) => {
+  const second = stream.locator('iframe[title="散步的意义"]');
+  await expect(second.contentFrame().locator("h1")).toHaveText("散步的意义");
+  // The heading can appear before the parent receives the frame's measured height.
+  await expect.poll(() => second.evaluate((el) =>
+    el.parentElement!.scrollHeight - el.parentElement!.clientHeight - el.offsetTop,
+  )).toBeGreaterThanOrEqual(400);
+  await second.evaluate((el) => {
     el.parentElement!.scrollTop = el.offsetTop + 400;
   });
+  await expect.poll(() => second.evaluate((el) =>
+    el.parentElement!.scrollTop - el.offsetTop,
+  )).toBe(400);
   await expect(page.locator("#chapter-caption")).toHaveText("散步的意义");
   await expect(page.locator("#position")).toContainText("2 / 3 节");
   await page.locator("#back").click();
