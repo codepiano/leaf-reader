@@ -4,6 +4,7 @@ mod cover;
 mod details;
 mod epub;
 mod library_directory;
+mod pdf;
 mod reading_time;
 mod scan;
 mod shelf_remove;
@@ -77,10 +78,24 @@ struct Library {
     metadata: HashMap<String, BookMeta>,
     groups: Vec<String>,
 }
+enum SessionBook {
+    Epub(Box<Book>),
+    Pdf(pdf::Pdf),
+}
+
+impl SessionBook {
+    fn epub_mut(&mut self) -> Result<&mut Book, String> {
+        match self {
+            Self::Epub(book) => Ok(book),
+            Self::Pdf(_) => Err("此功能仅适用于 EPUB".into()),
+        }
+    }
+}
+
 struct Session {
     token: String,
     id: String,
-    book: Book,
+    book: SessionBook,
     view_chapters: Vec<Chapter>,
     progress_weights: Vec<u64>,
     part_id: Option<String>,
@@ -92,6 +107,8 @@ struct ReaderState {
 }
 #[derive(Serialize)]
 struct Opened {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pdf_size: Option<u64>,
     track_reading_time: bool,
     token: String,
     id: String,
@@ -202,6 +219,41 @@ fn make_opened(
         .iter()
         .find(|r| r.id == session.id)
         .ok_or("书籍记录不存在")?;
+    if let SessionBook::Pdf(pdf) = &session.book {
+        if part_id.is_some() {
+            return Err("PDF 不支持合集模式".into());
+        }
+        let (title, author) =
+            details::names(library, &session.id, None, &recent.title, &recent.author);
+        session.token = token();
+        return Ok(Opened {
+            pdf_size: Some(pdf.size),
+            track_reading_time: library.settings.track_reading_time,
+            token: session.token.clone(),
+            id: session.id.clone(),
+            path: recent.path.clone(),
+            source_title: title.clone(),
+            title,
+            author,
+            chapters: Vec::new(),
+            progress_weights: Vec::new(),
+            toc: Vec::new(),
+            progress: if library.settings.remember_position {
+                recent.progress.clone()
+            } else {
+                Progress::default()
+            },
+            collection: Collection::default(),
+            candidates: Vec::new(),
+            part_id: None,
+            metadata: library
+                .metadata
+                .get(&session.id)
+                .cloned()
+                .unwrap_or_default(),
+        });
+    }
+    let book = session.book.epub_mut()?;
     let collection = library
         .collections
         .get(&session.id)
@@ -218,7 +270,7 @@ fn make_opened(
         Some(_) => return Err("合集模式已关闭，请重新打开原书".into()),
         None => None,
     };
-    let (chapters, toc) = collection::view(&mut session.book, part)?;
+    let (chapters, toc) = collection::view(book, part)?;
     let mut progress = part
         .map(|p| p.progress.clone())
         .unwrap_or_else(|| recent.progress.clone());
@@ -234,7 +286,7 @@ fn make_opened(
     session.progress_weights = if collection.enabled && part.is_none() {
         Vec::new()
     } else {
-        epub::progress_weights(&mut session.book.archive, &chapters)
+        epub::progress_weights(&mut book.archive, &chapters)
     };
     session.view_chapters = chapters.clone();
     session.part_id = part_id.map(str::to_string);
@@ -243,18 +295,10 @@ fn make_opened(
         library,
         &session.id,
         part_id,
-        part.map(|p| p.title.as_str())
-            .unwrap_or(&session.book.title),
-        &session.book.author,
+        part.map(|p| p.title.as_str()).unwrap_or(&book.title),
+        &book.author,
     );
-    let source_title = details::names(
-        library,
-        &session.id,
-        None,
-        &session.book.title,
-        &session.book.author,
-    )
-    .0;
+    let source_title = details::names(library, &session.id, None, &book.title, &book.author).0;
     let mut display_collection = collection.clone();
     for part in &mut display_collection.parts {
         part.title = details::names(
@@ -262,11 +306,12 @@ fn make_opened(
             &session.id,
             Some(&part.id),
             &part.title,
-            &session.book.author,
+            &book.author,
         )
         .0;
     }
     Ok(Opened {
+        pdf_size: None,
         track_reading_time: library.settings.track_reading_time,
         token: session.token.clone(),
         id: session.id.clone(),
@@ -279,7 +324,7 @@ fn make_opened(
         toc,
         progress,
         collection: display_collection,
-        candidates: collection::candidates(&session.book.toc),
+        candidates: collection::candidates(&book.toc),
         part_id: session.part_id.clone(),
         metadata: library
             .metadata
@@ -301,13 +346,13 @@ fn open_scoped_from(
     let canonical = path
         .canonicalize()
         .map_err(|_| "文件已移动或无法访问，请重新打开".to_string())?;
-    if canonical
-        .extension()
-        .is_none_or(|e| !e.eq_ignore_ascii_case("epub"))
-    {
-        return Err("请选择 .epub 文件".into());
-    }
-    let book = Book::open(&canonical)?;
+    let book = if pdf::is_pdf(&canonical) {
+        SessionBook::Pdf(pdf::Pdf::open(&canonical)?)
+    } else if pdf::is_supported(&canonical) {
+        SessionBook::Epub(Box::new(Book::open(&canonical)?))
+    } else {
+        return Err("请选择 EPUB 或 PDF 文件".into());
+    };
     let path = canonical.to_string_lossy().to_string();
     let mut hash = DefaultHasher::new();
     path.hash(&mut hash);
@@ -390,15 +435,26 @@ fn open_scoped_from(
                 .insert(original.to_string_lossy().to_string(), id.clone());
         }
     }
-    // Only a successful, explicit open restores removed entries; scans never clear exclusions.
-    next.hidden_books.remove(&id);
-    if let Some(part) = part_id {
-        next.hidden_books.remove(&item_key(&id, Some(part)));
-    } else {
-        let prefix = format!("{id}::");
-        next.hidden_books.retain(|key| !key.starts_with(&prefix));
+    let epub = matches!(&book, SessionBook::Epub(_));
+    // Restore hidden PDFs only after the first page renders.
+    if epub {
+        next.hidden_books.remove(&id);
+        if let Some(part) = part_id {
+            next.hidden_books.remove(&item_key(&id, Some(part)));
+        } else {
+            let prefix = format!("{id}::");
+            next.hidden_books.retain(|key| !key.starts_with(&prefix));
+        }
     }
     let old = next.recent.iter().find(|r| r.id == id).cloned();
+    let (title, author, chapters) = match &book {
+        SessionBook::Epub(book) => (book.title.clone(), book.author.clone(), book.chapters.len()),
+        SessionBook::Pdf(_) => (
+            pdf::title(&canonical),
+            String::new(),
+            old.as_ref().map_or(0, |r| r.chapters),
+        ),
+    };
     next.recent.retain(|r| r.id != id);
     next.recent.insert(
         0,
@@ -406,15 +462,15 @@ fn open_scoped_from(
             available: true,
             id: id.clone(),
             path,
-            title: book.title.clone(),
-            author: book.author.clone(),
-            chapters: book.chapters.len(),
+            title,
+            author,
+            chapters,
             progress: old.as_ref().map(|r| r.progress.clone()).unwrap_or_default(),
             opened: old.map(|r| r.opened).unwrap_or_default(),
         },
     );
     let c = next.collections.get(&id);
-    if part_id.is_none() && !c.is_some_and(|c| c.enabled) {
+    if epub && part_id.is_none() && !c.is_some_and(|c| c.enabled) {
         next.recent[0].opened = now();
     }
     if let Some(part_id) = part_id {
@@ -426,7 +482,7 @@ fn open_scoped_from(
             p.opened = now();
         }
     }
-    if part_id.is_some() || !next.collections.get(&id).is_some_and(|c| c.enabled) {
+    if epub && (part_id.is_some() || !next.collections.get(&id).is_some_and(|c| c.enabled)) {
         next.metadata
             .entry(item_key(&id, part_id))
             .or_default()
@@ -514,8 +570,9 @@ fn configure_collection(
         .get(&session.id)
         .cloned()
         .unwrap_or_default();
+    let book = session.book.epub_mut()?;
     let collection = if enabled {
-        collection::plan(&mut session.book, node_ids, &old)?
+        collection::plan(book, node_ids, &old)?
     } else {
         Collection {
             enabled: false,
@@ -555,7 +612,8 @@ async fn get_chapter(app: tauri::AppHandle, token: String, index: usize) -> Resu
             .filter(|s| s.token == token)
             .ok_or("书籍已关闭")?;
         let path = s.view_chapters.get(index).ok_or("章节不存在")?.path.clone();
-        String::from_utf8(epub::read(&mut s.book.archive, &path, 8 * 1024 * 1024)?)
+        let book = s.book.epub_mut()?;
+        String::from_utf8(epub::read(&mut book.archive, &path, 8 * 1024 * 1024)?)
             .map_err(|_| "章节不是 UTF-8 编码".into())
     })
     .await
@@ -572,7 +630,11 @@ fn write_progress(
         .as_ref()
         .filter(|s| s.token == token)
         .ok_or("书籍已关闭")?;
-    if chapter >= s.view_chapters.len() || !fraction.is_finite() {
+    let total = match &s.book {
+        SessionBook::Epub(_) => s.view_chapters.len(),
+        SessionBook::Pdf(pdf) => pdf.pages,
+    };
+    if chapter >= total || !fraction.is_finite() {
         return Err("无效的阅读位置".into());
     }
     let mut library = state.library.lock().map_err(|e| e.to_string())?;
@@ -585,10 +647,13 @@ fn write_progress(
     let progress = Progress {
         chapter,
         fraction,
-        book_fraction: weights.get(chapter).map(|weight| {
-            let before = weights[..chapter].iter().sum::<u64>() as f64;
-            (before + *weight as f64 * fraction) / weights.iter().sum::<u64>() as f64
-        }),
+        book_fraction: match &s.book {
+            SessionBook::Pdf(_) => Some((chapter + 1) as f64 / total as f64),
+            SessionBook::Epub(_) => weights.get(chapter).map(|weight| {
+                let before = weights[..chapter].iter().sum::<u64>() as f64;
+                (before + *weight as f64 * fraction) / weights.iter().sum::<u64>() as f64
+            }),
+        },
     };
     if let Some(id) = &s.part_id {
         let part = next
@@ -851,8 +916,9 @@ fn resource(app: &tauri::AppHandle, url: &str) -> Result<(Vec<u8>, &'static str)
         "otf" => "font/otf",
         _ => return Err("不支持此资源类型".into()),
     };
+    let book = session.book.epub_mut()?;
     Ok((
-        epub::read(&mut session.book.archive, path, epub::RESOURCE_LIMIT)?,
+        epub::read(&mut book.archive, path, epub::RESOURCE_LIMIT)?,
         mime,
     ))
 }
@@ -913,6 +979,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_book,
             open_demo,
+            pdf::read_pdf_range,
+            pdf::set_pdf_pages,
             list_recent,
             get_chapter,
             save_progress,

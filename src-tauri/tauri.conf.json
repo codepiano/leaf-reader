@@ -21,14 +21,14 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' tauri://localhost/reader-bridge.js http://tauri.localhost/reader-bridge.js; style-src 'self' 'unsafe-inline' epub: http://epub.localhost; img-src 'self' data: epub: http://epub.localhost; font-src 'self' data: epub: http://epub.localhost; connect-src data: ipc: http://ipc.localhost; frame-src 'self'; object-src 'none'; base-uri 'self' epub: http://epub.localhost"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' tauri://localhost/reader-bridge.js http://tauri.localhost/reader-bridge.js; style-src 'self' 'unsafe-inline' epub: http://epub.localhost; img-src 'self' data: epub: http://epub.localhost; font-src 'self' data: epub: http://epub.localhost; connect-src 'self' data: ipc: http://ipc.localhost; frame-src 'self'; object-src 'none'; base-uri 'self' epub: http://epub.localhost"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "category": "Education",
-    "shortDescription": "轻巧、安静的本地 EPUB 阅读器",
+    "shortDescription": "轻巧、安静的本地电子书阅读器",
     "icon": [
       "icons/icon.png",
       "icons/icon.icns",

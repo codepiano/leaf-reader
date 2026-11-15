@@ -166,11 +166,7 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
                 }
                 continue;
             }
-            if !kind.is_file()
-                || path
-                    .extension()
-                    .is_none_or(|e| !e.eq_ignore_ascii_case("epub"))
-            {
+            if !kind.is_file() || !pdf::is_supported(&path) {
                 continue;
             }
             if !seen_files.insert(path.clone()) {
@@ -192,17 +188,22 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
                     continue;
                 }
             }
-            match Book::open(&path) {
-                Ok(book) => {
+            let metadata = if pdf::is_pdf(&path) {
+                pdf::Pdf::open(&path).map(|_| (pdf::title(&path), String::new(), 0))
+            } else {
+                Book::open(&path).map(|book| (book.title, book.author, book.chapters.len()))
+            };
+            match metadata {
+                Ok((title, author, chapters)) => {
                     let mut hash = DefaultHasher::new();
                     path_string.hash(&mut hash);
                     discoveries.push(Recent {
                         available: true,
                         id: format!("{:x}", hash.finish()),
                         path: path_string,
-                        title: book.title,
-                        author: book.author,
-                        chapters: book.chapters.len(),
+                        title,
+                        author,
+                        chapters,
                         progress: Progress::default(),
                         opened: 0,
                     });
@@ -248,11 +249,13 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
             let record = &mut next.recent[index];
             if record.title != book.title
                 || record.author != book.author
-                || record.chapters != book.chapters
+                || (book.chapters > 0 && record.chapters != book.chapters)
             {
                 record.title = book.title;
                 record.author = book.author;
-                record.chapters = book.chapters;
+                if book.chapters > 0 {
+                    record.chapters = book.chapters;
+                }
                 updated.insert(record.id.clone());
                 dirty = true;
             }

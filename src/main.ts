@@ -12,6 +12,7 @@ import "./style.css";
 import {
   type Book,
   readingPercent,
+  isPdf,
   type Chapter,
   type Toc,
   escapeHTML,
@@ -24,6 +25,7 @@ import { initScanDirectories } from "./scan-directories";
 import { ReadingClock } from "./reading-clock";
 import { initBookInfo, showBookInfo } from "./book-info";
 import { initLibrarySettings } from "./library-settings";
+import type { PdfReader } from "./pdf-reader";
 
 initFocus();
 
@@ -57,6 +59,7 @@ function loadSettings(): Settings {
 }
 let settings = loadSettings();
 let book: Book | null = null;
+let pdf: PdfReader | undefined;
 let chapter = 0;
 let fraction = 0;
 let progressOffsets: number[] = [];
@@ -121,15 +124,35 @@ $("#app").innerHTML = `
     <div class="sidebar-bottom"><div class="local-badge"><span></span>本地存储 · 离线可用</div><p>给阅读，留一点空间。</p><span class="version">LEAF READER / 0.1</span></div>
   </aside>
   <main>
-    <header class="topbar"><div id="breadcrumb">书架 <span>/</span> 全部书籍</div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><button type="button" id="toc-toggle" class="quiet-button" aria-label="本书目录" title="本书目录" aria-expanded="false" aria-controls="toc-panel" hidden>${icon("list")}<span>目录</span></button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开 EPUB</wa-button></div></header>
+    <header class="topbar"><div id="breadcrumb">书架 <span>/</span> 全部书籍</div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><button type="button" id="toc-toggle" class="quiet-button" aria-label="本书目录" title="本书目录" aria-expanded="false" aria-controls="toc-panel" hidden>${icon("list")}<span>目录</span></button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开书籍</wa-button></div></header>
     <section id="library-view" class="library-view">
       <div class="shelf-heading"><h2>我的书架 <span id="shelf-count">0 本</span></h2><span class="muted">最近阅读</span></div>
       <div id="shelf" class="shelf"></div>
-      <div id="empty" class="empty-state"><div class="empty-art">${icon("book")}<span class="art-leaf">${icon("leaf")}</span></div><h2>下一段旅程，从这里开始</h2><p>打开一本 EPUB，把喜欢的文字放在手边。<br>也可以将文件拖到窗口中。</p><wa-button id="empty-open" class="primary-button" size="small">${icon("folder")}选择本地书籍</wa-button><wa-button id="demo" class="text-button" size="small">先读一段示例 ${icon("arrow")}</wa-button><div class="empty-foot">无需账号 · 无需联网 · 只专注阅读</div></div>
-      <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB 2 / 3</span></footer>
+      <div id="empty" class="empty-state"><div class="empty-art">${icon("book")}<span class="art-leaf">${icon("leaf")}</span></div><h2>下一段旅程，从这里开始</h2><p>打开一本书，把喜欢的文字放在手边。<br>也可以将文件拖到窗口中。</p><wa-button id="empty-open" class="primary-button" size="small">${icon("folder")}选择本地书籍</wa-button><wa-button id="demo" class="text-button" size="small">先读一段示例 ${icon("arrow")}</wa-button><div class="empty-foot">无需账号 · 无需联网 · 只专注阅读</div></div>
+      <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB 2 / 3 · PDF</span></footer>
     </section>
     <div id="reader-workspace" hidden>
-    <section id="reader-view" class="reader-view"><div class="reader-caption"><span id="chapter-caption"></span><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div><div id="chapter-loading" class="chapter-loading" hidden>正在打开章节…</div><iframe id="reader" title="书籍正文" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe><footer class="reader-footer"><wa-button id="prev" class="quiet-button" size="small">${icon("left")}上一章</wa-button><div><span id="position"></span><progress id="reading-progress" class="progress-track" max="100" value="0" aria-label="阅读进度"></progress></div><wa-button id="next" class="quiet-button" size="small">下一章${icon("right")}</wa-button></footer></section>
+    <section id="reader-view" class="reader-view">
+      <div class="reader-caption"><span id="chapter-caption"></span><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div>
+      <div id="chapter-loading" class="chapter-loading" role="status" hidden></div>
+      <div id="pdf-tools" hidden>
+        <form id="pdf-jump">
+          <label for="pdf-page">页码</label>
+          <input id="pdf-page" name="page" class="field-input" type="number" min="1" required>
+          <span id="pdf-total"></span>
+          <button id="pdf-go" type="submit" class="quiet-button">跳转</button>
+        </form>
+        <div class="pdf-zoom" role="group" aria-label="页面缩放">
+          <button id="pdf-zoom-out" class="quiet-button" aria-label="缩小" type="button">−</button>
+          <output id="pdf-scale" aria-label="缩放比例"></output>
+          <button id="pdf-zoom-in" class="quiet-button" aria-label="放大" type="button">＋</button>
+          <button id="pdf-fit" class="quiet-button" aria-pressed="true" type="button">适合页面</button>
+        </div>
+      </div>
+      <iframe id="reader" title="书籍正文" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
+      <div id="pdf-viewport" role="region" aria-label="PDF 正文" tabindex="0" hidden></div>
+      <footer class="reader-footer"><wa-button id="prev" class="quiet-button" size="small">${icon("left")}<span id="prev-label">上一章</span></wa-button><div><span id="position"></span><progress id="reading-progress" class="progress-track" max="100" value="0" aria-label="阅读进度"></progress></div><wa-button id="next" class="quiet-button" size="small"><span id="next-label">下一章</span>${icon("right")}</wa-button></footer>
+    </section>
     <aside id="toc-panel" aria-labelledby="toc-title" hidden>
       <div id="toc-resize" role="separator" tabindex="0" aria-labelledby="toc-title" aria-orientation="vertical" aria-controls="toc-panel" title="拖动调整目录宽度"></div>
       <header class="toc-header"><div class="toc-heading"><h2 id="toc-title">本书目录</h2><span id="toc-count"></span></div><div class="toc-actions">
@@ -140,7 +163,7 @@ $("#app").innerHTML = `
     </aside>
     </div>
     <section id="settings-panel" class="settings-panel" aria-label="阅读设置" hidden><div class="settings-title"><h2>阅读设置</h2><wa-button id="settings-close" class="icon-button" aria-label="关闭设置" size="small">${icon("close")}</wa-button></div><label>字体大小 <output id="size-value"></output><wa-slider id="font-size" aria-label="字体大小" min="14" max="30" step="1"></wa-slider></label><label>行间距 <output id="line-value"></output><wa-slider id="line-height" aria-label="行间距" min="1.4" max="2.4" step="0.1"></wa-slider></label><label>阅读宽度 <output id="width-value"></output><wa-slider id="reading-width" aria-label="阅读宽度" min="480" max="900" step="20"></wa-slider></label><label class="select-label">正文字体<wa-select id="font-family" aria-label="正文字体" size="small"><wa-option value="serif">宋体 / 衬线字体</wa-option><wa-option value="sans">黑体 / 无衬线字体</wa-option></wa-select></label><div class="field-label">阅读背景</div><div class="themes"><button data-theme="paper" class="theme-swatch paper">暖纸</button><button data-theme="white" class="theme-swatch white">素白</button><button data-theme="night" class="theme-swatch night">夜读</button></div><p class="settings-note">设置自动保存，仅存于本机。</p></section>
-  </main><div id="toast" role="status" hidden></div><div id="drop-overlay" hidden>${icon("book")}放下 EPUB，开始阅读</div>`;
+  </main><div id="toast" role="status" hidden></div><div id="drop-overlay" hidden>${icon("book")}放下书籍，开始阅读</div>`;
 
 document.body.insertAdjacentHTML(
   "beforeend",
@@ -342,7 +365,7 @@ function flushProgress() {
     .catch(() => {})
     .then(async () => {
       await readingClock.flush();
-      const value = await readPosition();
+      const value = pdf ? 1 : await readPosition();
       await invoke("save_progress", { token, chapter: index, fraction: value });
     });
   return saveChain;
@@ -418,6 +441,18 @@ window.addEventListener("message", (e) => {
 });
 function updatePosition() {
   if (!book) return;
+  if (pdf) {
+    const progress = readingPercent((chapter + 1) / pdf.pages);
+    $("#position").textContent = `${chapter + 1} / ${pdf.pages} 页 · ${progress}%`;
+    $<HTMLProgressElement>("#reading-progress").value = progress;
+    $<WaButton>("#prev").disabled = loadingChapter || chapter === 0;
+    $<WaButton>("#next").disabled = loadingChapter || chapter === pdf.pages - 1;
+    $<HTMLInputElement>("#pdf-page").max = String(pdf.pages);
+    $("#pdf-total").textContent = `/ ${pdf.pages}`;
+    syncPdfControls();
+    tocTree.active(chapter);
+    return;
+  }
   const start = progressOffsets[chapter];
   const weight = progressOffsets[chapter + 1] - start;
   const progress = readingPercent(
@@ -457,6 +492,7 @@ async function openPath(
 }
 async function presentBook(opened: Book) {
   clearReader();
+  await closePdf();
   book = opened;
   $("#book-info").hidden = false;
   chapter = opened.progress.chapter;
@@ -466,7 +502,7 @@ async function presentBook(opened: Book) {
   book.candidates ??= [];
   book.part_id ??= null;
   book.source_title ??= book.title;
-  $("#collection-mode").hidden = false;
+  $("#collection-mode").hidden = opened.pdf_size !== undefined;
   $("#collection-mode").textContent = book.collection.enabled
     ? "合集设置"
     : "合集模式";
@@ -480,6 +516,13 @@ async function presentBook(opened: Book) {
     document.title = `${book.title} · Leaf`;
     return;
   }
+  const isPdfBook = opened.pdf_size !== undefined;
+  $("#reader").hidden = isPdfBook;
+  $("#pdf-viewport").hidden = !isPdfBook;
+  $("#pdf-tools").hidden = true;
+  $("#prev-label").textContent = isPdfBook ? "上一页" : "上一章";
+  $("#next-label").textContent = isPdfBook ? "下一页" : "下一章";
+  $("#chapter-loading").textContent = isPdfBook ? "正在打开 PDF…" : "正在打开章节…";
   progressOffsets = [0];
   for (let i = 0; i < book.chapters.length; i++) {
     progressOffsets.push(progressOffsets[i] + (book.progress_weights?.[i] ?? 1));
@@ -490,6 +533,15 @@ async function presentBook(opened: Book) {
     ? `${book.source_title} / ${book.title}`
     : `阅读 / ${book.title}`;
   document.title = `${book.title} · Leaf`;
+  if (opened.pdf_size !== undefined) {
+    try {
+      await presentPdf(opened, opened.pdf_size);
+    } catch (error) {
+      await returnToShelf({ kind: "all" });
+      throw error;
+    }
+    return;
+  }
   tocTree.render(book, navigateFromToc, openPartFromToc);
   await renderChapter(chapter, fraction);
 }
@@ -499,7 +551,7 @@ async function pickBook() {
     const path = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: "EPUB 电子书", extensions: ["epub"] }],
+      filters: [{ name: "电子书", extensions: ["epub", "pdf"] }],
     });
     if (typeof path === "string") await openPath(path, false, undefined, true);
   } catch (e) {
@@ -655,16 +707,101 @@ async function renderChapter(index: number, targetFraction = 0, fragment = "") {
     }
   }
 }
+function syncPdfControls() {
+  if (!pdf) return;
+  $("#pdf-scale").textContent = `${Math.round(pdf.scale * 100)}%`;
+  $("#pdf-fit").setAttribute("aria-pressed", String(pdf.isFit));
+  $<HTMLButtonElement>("#pdf-zoom-out").disabled = loadingChapter || pdf.scale <= 0.25;
+  $<HTMLButtonElement>("#pdf-zoom-in").disabled = loadingChapter || pdf.scale >= 5;
+  $<HTMLButtonElement>("#pdf-fit").disabled = loadingChapter;
+  $<HTMLButtonElement>("#pdf-go").disabled = loadingChapter;
+}
+
+async function closePdf() {
+  const current = pdf;
+  pdf = undefined;
+  if (current) await current.close();
+}
+
+async function presentPdf(opened: Book, size: number) {
+  $<HTMLIFrameElement>("#reader").srcdoc = "";
+  $("#chapter-caption").textContent = opened.title;
+  $("#position").textContent = "";
+  $<HTMLProgressElement>("#reading-progress").value = 0;
+  $<WaButton>("#prev").disabled = $<WaButton>("#next").disabled = true;
+  $("#chapter-loading").hidden = false;
+  $("#toc-count").textContent = "";
+  $("#toc").textContent = "正在读取目录…";
+  try {
+    const { openPdf } = await import("./pdf-reader");
+    const reader = await openPdf(opened.token, size, $("#pdf-viewport"), syncPdfControls);
+    pdf = reader;
+    chapter = Math.min(Math.max(0, chapter), reader.pages - 1);
+    await reader.render(chapter);
+    await invoke("set_pdf_pages", { token: opened.token, pages: reader.pages });
+    $("#pdf-tools").hidden = false;
+    $<HTMLInputElement>("#pdf-page").value = String(chapter + 1);
+    readerReady = true;
+    updatePosition();
+    await flushProgress();
+    void reader.outline().then((outline) => {
+      if (pdf !== reader) return;
+      opened.toc = outline;
+      tocTree.render(opened, navigateFromToc, openPartFromToc);
+      tocTree.active(chapter, true);
+    }).catch(() => {
+      if (pdf === reader) $("#toc").textContent = "无法读取 PDF 目录，可用页码跳转。";
+    });
+  } finally {
+    $("#chapter-loading").hidden = true;
+  }
+}
+
+async function renderPdfPage(index: number, zoom?: number | null) {
+  if (!pdf || loadingChapter) return;
+  if (zoom !== undefined) pdf.zoomTo(zoom);
+  loadingChapter = true;
+  updatePosition();
+  try {
+    if (await pdf.render(index, zoom !== undefined)) {
+      chapter = index;
+      $<HTMLInputElement>("#pdf-page").value = String(index + 1);
+      tocTree.active(chapter, true);
+    }
+  } finally {
+    loadingChapter = false;
+    updatePosition();
+  }
+  if (zoom === undefined) await flushProgress();
+}
+
+$("#pdf-jump").onsubmit = (event) => {
+  event.preventDefault();
+  const input = $<HTMLInputElement>("#pdf-page");
+  if (input.reportValidity()) void navigate(input.valueAsNumber - 1);
+};
+for (const [id, factor] of [["pdf-zoom-out", 1 / 1.25], ["pdf-zoom-in", 1.25]] as const) {
+  $(`#${id}`).onclick = () => {
+    if (pdf) void renderPdfPage(chapter, pdf.scale * factor).catch(showError);
+  };
+}
+$("#pdf-fit").onclick = () => void renderPdfPage(chapter, null).catch(showError);
+$("#pdf-viewport").onpointerdown = () => tocSidebar.dismissTemporary();
+
 async function navigate(index: number, targetFraction = 0, fragment = "") {
   if (
     !book ||
     busy ||
     loadingChapter ||
     index < 0 ||
-    index >= book.chapters.length
+    index >= (pdf?.pages ?? book.chapters.length)
   )
     return;
   try {
+    if (pdf) {
+      await renderPdfPage(index);
+      return;
+    }
     await flushProgress();
     await renderChapter(index, targetFraction, fragment);
     await flushProgress();
@@ -677,23 +814,28 @@ async function libraryView(filter: Filter = { kind: "all" }) {
   try {
     readingClock.pause();
     await flushProgress();
-    ++revision;
-    clearReader();
-    book = null;
-    $("#book-info").hidden = true;
-    $<HTMLIFrameElement>("#reader").srcdoc = "";
-    await invoke("close_book");
-    setReadingView(false);
-    $("#breadcrumb").textContent = "书架 / 全部书籍";
-    document.title = "Leaf · 本地阅读";
-    await refreshShelf();
-    shelf.select(filter);
-    $("#collection-mode").hidden = filter.kind !== "collection";
-    $("#collection-mode").textContent = "合集设置";
+    await returnToShelf(filter);
   } catch (e) {
     showError(e);
   }
 }
+async function returnToShelf(filter: Filter) {
+  ++revision;
+  clearReader();
+  await closePdf();
+  book = null;
+  $("#book-info").hidden = true;
+  $<HTMLIFrameElement>("#reader").srcdoc = "";
+  setReadingView(false);
+  $("#breadcrumb").textContent = "书架 / 全部书籍";
+  document.title = "Leaf · 本地阅读";
+  await invoke("close_book");
+  await refreshShelf();
+  shelf.select(filter);
+  $("#collection-mode").hidden = filter.kind !== "collection";
+  $("#collection-mode").textContent = "合集设置";
+}
+
 let controlsReady: Promise<unknown> | undefined;
 async function toggleSettings(show = $("#settings-panel").hidden) {
   if (show) {
@@ -764,9 +906,9 @@ function onKey(e: KeyboardEvent) {
     }
     if (e.key === " " || e.key === "PageDown" || e.key === "PageUp") {
       e.preventDefault();
-      sendReader("scroll", {
-        direction: e.key === "PageUp" || e.shiftKey ? -1 : 1,
-      });
+      const direction = e.key === "PageUp" || e.shiftKey ? -1 : 1;
+      if (pdf) void navigate(chapter + direction);
+      else sendReader("scroll", { direction });
     }
   }
 }
@@ -852,10 +994,10 @@ if (isTauri()) {
       e.payload.type !== "over" && e.payload.type !== "enter";
     if (e.payload.type === "drop") {
       const path = e.payload.paths.find((p) =>
-        p.toLowerCase().endsWith(".epub"),
+        isPdf(p) || /\.epub$/i.test(p),
       );
       if (path) void openPath(path, false, undefined, true);
-      else showError("请拖入 .epub 文件。");
+      else showError("请拖入 EPUB 或 PDF 文件。");
     }
   });
   let closing = false;

@@ -65,7 +65,10 @@ export type Candidate = {
   start: Location | null;
   suggested: boolean;
 };
+export const isPdf = (path: string) => /\.pdf$/i.test(path);
+
 export type Book = {
+  pdf_size?: number;
   token: string;
   track_reading_time?: boolean;
   id: string;

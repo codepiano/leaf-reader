@@ -50,6 +50,11 @@ export class TocTree {
     ) {
       roots = roots[0].children;
     }
+    if (book.pdf_size !== undefined && !roots.length) {
+      this.count.textContent = "0 项";
+      this.el.innerHTML = '<p class="field-hint">此 PDF 没有内嵌目录，可用页码跳转。</p>';
+      return;
+    }
     this.count.textContent = `${walkToc(roots).length} 项`;
     const ordinal = (number: number) =>
       `<span class="toc-ordinal" aria-hidden="true">${String(number).padStart(2, "0")}</span>`;

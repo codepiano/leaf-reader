@@ -347,7 +347,7 @@ export class Shelf {
     $("#shelf").innerHTML =
       list.map((i, n) => this.card(i, n)).join("") +
       (all.length && this.filter.kind === "all" && !q
-        ? `<button id="add-card" class="add-card">${this.icon("plus")}<span>打开另一本书</span><small>本地 EPUB 文件</small></button>`
+        ? `<button id="add-card" class="add-card">${this.icon("plus")}<span>打开另一本书</span><small>本地 EPUB / PDF 文件</small></button>`
         : "");
     this.covers.bind($("#shelf"));
     $("#add-card")?.addEventListener("click", () =>
@@ -467,7 +467,7 @@ export class Shelf {
     $("#remove-book-title").textContent = `移除“${item.title}”？`;
     $("#remove-book-description").textContent = item.partId
       ? "只从书架移除这本子书，其他子书及原 EPUB 保留。刷新不会恢复；手动重新打开原 EPUB 会恢复该合集已移除的子书，阅读记录和手动信息保留。"
-      : "只从书架移除，保留原 EPUB、阅读记录和手动信息。扫描和刷新将忽略这本书；手动重新打开文件可恢复。";
+      : "只从书架移除，保留原文件、阅读记录和手动信息。扫描和刷新将忽略这本书；手动重新打开文件可恢复。";
     $("#remove-book-error").hidden = true;
     let busy = false;
     const controls = [

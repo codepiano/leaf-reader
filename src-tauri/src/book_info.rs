@@ -74,7 +74,11 @@ pub fn info(state: &ReaderState, source_id: &str, part_id: Option<&str>) -> Resu
         Ok(_) => (None, None, Some("原路径不再是文件".into())),
         Err(e) => (None, None, Some(format!("文件已移动或无法访问：{e}"))),
     };
-    let mut original_details = details::original(Path::new(&book.path)).unwrap_or_default();
+    let mut original_details = if pdf::is_pdf(Path::new(&book.path)) {
+        details::Details::default()
+    } else {
+        details::original(Path::new(&book.path)).unwrap_or_default()
+    };
     original_details.title = part
         .as_ref()
         .map(|p| p.title.clone())

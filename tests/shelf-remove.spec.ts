@@ -20,7 +20,7 @@ test("removed books stay out of refresh and survive reload until manually opened
   await page.locator("#metadata-remove").click();
   await expect(page.locator("#remove-book-dialog h2")).toBeFocused();
   await expect(page.locator("#remove-book-description")).toContainText(
-    "保留原 EPUB",
+    "保留原文件",
   );
   await page.locator("#remove-book-cancel").click();
   await expect(page.locator(".book-card")).toHaveCount(2);

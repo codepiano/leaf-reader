@@ -21,3 +21,5 @@ __pycache__/
 *.log
 *.epub
 !/fixtures/*.epub
+*.pdf
+!/fixtures/paged-sample.pdf

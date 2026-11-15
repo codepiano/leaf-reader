@@ -104,12 +104,10 @@ pub fn source(state: &ReaderState, path: &Path, importing: bool) -> Result<PathB
     let source = path
         .canonicalize()
         .map_err(|e| format!("无法访问原文件：{e}"))?;
-    if source
-        .extension()
-        .is_none_or(|e| !e.eq_ignore_ascii_case("epub"))
-    {
-        return Err("请选择 .epub 文件".into());
+    if !pdf::is_supported(&source) {
+        return Err("请选择 EPUB 或 PDF 文件".into());
     }
+    let extension = source.extension().unwrap_or_default().to_string_lossy();
     let directory = PathBuf::from(settings.directory.ok_or("请先选择书库目录")?)
         .canonicalize()
         .map_err(|e| format!("无法访问书库目录：{e}"))?;
@@ -117,14 +115,18 @@ pub fn source(state: &ReaderState, path: &Path, importing: bool) -> Result<PathB
         return Ok(source);
     }
     // Validate before creating a copy, so malformed books do not enter the library directory.
-    drop(Book::open(&source)?);
+    if pdf::is_pdf(&source) {
+        drop(pdf::Pdf::open(&source)?);
+    } else {
+        drop(Book::open(&source)?);
+    }
     let name = source.file_name().ok_or("文件名无效")?;
     let stem = source.file_stem().ok_or("文件名无效")?.to_string_lossy();
     for suffix in 0..10000 {
         let destination = directory.join(if suffix == 0 {
             name.to_os_string()
         } else {
-            format!("{stem} ({suffix}).epub").into()
+            format!("{stem} ({suffix}).{extension}").into()
         });
         match fs::OpenOptions::new()
             .write(true)
