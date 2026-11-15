@@ -1,9 +1,17 @@
-import type { SearchTarget } from "./book-search";
+import type { ReaderTarget } from "./book-search";
+import type { ReadingMark, TextAnchor } from "./types";
 
 type Entry = { index: number; frame: HTMLIFrameElement; channel: string; measured: boolean };
 type Position = { chapter: number; fraction: number };
-type Action = { type: string; href?: string; direction?: number };
-type Jump = { index: number; fraction: number; fragment: string; search?: SearchTarget };
+export type ReaderAction = {
+  type: string;
+  href?: string;
+  direction?: number;
+  anchor?: TextAnchor | null;
+  fraction?: number;
+  offset?: number;
+};
+type Jump = { index: number; fraction: number; fragment: string; search?: ReaderTarget };
 
 export class ContinuousReader {
   private entries: Entry[] = [];
@@ -19,7 +27,7 @@ export class ContinuousReader {
     private load: (index: number, channel: string) => Promise<string>,
     private title: (index: number) => string,
     private onPosition: (position: Position) => void,
-    private onAction: (index: number, action: Action) => void,
+    private onAction: (index: number, action: ReaderAction) => void,
     private onError: (message: unknown) => void,
   ) {
     window.addEventListener("message", this.receive);
@@ -38,7 +46,7 @@ export class ContinuousReader {
     this.entries = [];
   }
 
-  open(index: number, fraction: number, fragment: string, search?: SearchTarget) {
+  open(index: number, fraction: number, fragment: string, search?: ReaderTarget) {
     this.clearPending("章节已切换");
     this.target = { index, fraction, fragment, search };
     this.lastPosition = { chapter: index, fraction };
@@ -75,6 +83,19 @@ export class ContinuousReader {
 
   scroll(delta: number) {
     this.viewport.scrollTop += delta;
+  }
+
+  fractionAt(index: number, offset: number) {
+    const entry = this.entries.find((item) => item.index === index);
+    const extent = (entry?.frame.offsetHeight ?? 0) - this.viewport.clientHeight;
+    return Math.min(1, Math.max(0, offset / Math.max(1, extent)));
+  }
+
+  showMarks(marksAt: (index: number) => ReadingMark[], index?: number) {
+    for (const entry of this.entries) {
+      if (index === undefined || entry.index === index)
+        this.post(entry, "marks", { marks: marksAt(entry.index) });
+    }
   }
 
   style(css: string) {
@@ -193,8 +214,11 @@ export class ContinuousReader {
       if (isBefore) this.viewport.scrollTop = top + entry.frame.offsetHeight - oldHeight;
       if (this.target?.index === entry.index) this.locate();
       this.queueUpdate();
-    } else if (m.type === "located" && this.target?.index === entry.index && Number.isFinite(m.offset)) {
-      this.finish(entry, Math.max(0, m.offset - 24));
+    } else if (m.type === "located" && this.target?.index === entry.index && (Number.isFinite(m.offset) || m.offset === null)) {
+      const offset = m.offset === null
+        ? Math.max(0, entry.frame.offsetHeight - this.viewport.clientHeight) * this.target.fraction
+        : Math.max(0, m.offset - 24);
+      this.finish(entry, offset);
     } else if (m.type === "wheel" && Number.isFinite(m.delta)) {
       const scale = m.mode === 1 ? 20 : m.mode === 2 ? this.viewport.clientHeight : 1;
       this.scroll(m.delta * scale);

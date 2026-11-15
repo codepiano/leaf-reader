@@ -202,6 +202,7 @@ select {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 select:focus-visible {
   outline: var(--wa-focus-ring);
   outline-offset: var(--wa-focus-ring-offset);
@@ -2077,4 +2078,49 @@ wa-button.danger-button::part(button) { background: #945348; border-color: #9453
 }
 #book-search-results span {
   color: var(--muted);
+}
+
+.marks-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+#marks-list {
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+#marks-list > li {
+  padding: 12px 0;
+  border-block-start: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+#marks-list p,
+#marks-quote {
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#marks-quote {
+  margin: 0 0 12px;
+  border-inline-start: 2px solid var(--accent);
+  padding: 4px 12px;
+  max-block-size: 8rem;
+  overflow: auto;
+}
+#marks-style {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid var(--line);
+  margin: 0 0 14px;
+}
+#marks-style legend {
+  font-size: 12px;
+}
+#marks-note {
+  inline-size: 100%;
+  resize: vertical;
 }

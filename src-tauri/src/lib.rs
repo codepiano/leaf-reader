@@ -4,12 +4,13 @@ mod collection;
 mod comic;
 mod cover;
 mod details;
-mod metadata_lookup;
 mod epub;
 mod github;
 mod kindle;
 mod library_directory;
+mod metadata_lookup;
 mod pdf;
+mod reading_marks;
 mod reading_time;
 mod scan;
 mod shelf_remove;
@@ -78,6 +79,7 @@ struct Recent {
 struct Library {
     settings: library_directory::Settings,
     reading_ms: HashMap<String, u64>,
+    reading_marks: HashMap<String, Vec<reading_marks::ReadingMark>>,
     scan_directories: Vec<String>,
     import_sources: HashMap<String, String>,
     hidden_books: HashSet<String>,
@@ -127,6 +129,7 @@ struct Opened {
     comic_pages: Option<usize>,
     track_reading_time: bool,
     token: String,
+    reading_marks: Vec<reading_marks::ReadingMark>,
     id: String,
     path: String,
     title: String,
@@ -341,6 +344,11 @@ fn make_opened(
         comic_pages,
         track_reading_time: library.settings.track_reading_time,
         token: session.token.clone(),
+        reading_marks: library
+            .reading_marks
+            .get(&item_key(&session.id, part_id))
+            .cloned()
+            .unwrap_or_default(),
         id: session.id.clone(),
         path: recent.path.clone(),
         title,
@@ -1171,6 +1179,7 @@ pub fn run() {
             book_info::book_info,
             details::edit_book_details,
             metadata_lookup::lookup_book_metadata,
+            reading_marks::edit_reading_marks,
             reading_time::save_reading_time,
             library_directory::library_settings,
             library_directory::set_library_settings,

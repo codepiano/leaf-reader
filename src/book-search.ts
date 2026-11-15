@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Book } from "./types";
+import type { Book, TextAnchor } from "./types";
 
 export type SearchTarget = { query: string; occurrence: number };
+export type ReaderTarget = SearchTarget | { anchor: TextAnchor };
 export type SearchHit = { chapter: number; excerpt: string; target: SearchTarget };
 
 const excluded = "script,style,title,template,iframe,object,embed,form,button,textarea,select,audio,video,.math-inline,.math-display,[hidden], [aria-hidden=true]";

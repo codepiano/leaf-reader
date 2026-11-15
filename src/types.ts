@@ -1,3 +1,21 @@
+export type TextAnchor = { start: number; quote: string; prefix: string; suffix: string };
+export type MarkStyle = "underline" | "highlight";
+export type ReadingMark = {
+  id: string;
+  chapter: number;
+  path: string | null;
+  start_fragment: string | null;
+  fraction: number;
+  anchor: TextAnchor | null;
+  style: MarkStyle;
+  note: string;
+};
+
+export type MarkEdit =
+  | ({ action: "add" } & Pick<ReadingMark, "chapter" | "fraction" | "anchor" | "style" | "note">)
+  | ({ action: "update" } & Pick<ReadingMark, "id" | "style" | "note">)
+  | { action: "remove"; id: string };
+
 export type Progress = {
   chapter: number;
   fraction: number;
@@ -72,6 +90,7 @@ export type Book = {
   pdf_size?: number;
   comic_pages?: number;
   token: string;
+  reading_marks?: ReadingMark[];
   track_reading_time?: boolean;
   id: string;
   path: string;

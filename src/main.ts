@@ -13,6 +13,8 @@ import markdownCSS from "./markdown-rich.css?inline";
 import transcriptCSS from "../src-tauri/reading-transcript.css?inline";
 import {
   type Book,
+  type ReadingMark,
+  type TextAnchor,
   readingPercent,
   type Chapter,
   type Toc,
@@ -27,8 +29,9 @@ import { ReadingClock } from "./reading-clock";
 import { initBookInfo, showBookInfo } from "./book-info";
 import { initLibrarySettings } from "./library-settings";
 import type { PagedReader } from "./paged-reader";
-import { ContinuousReader } from "./continuous-reader";
-import { searchBook, type SearchTarget } from "./book-search";
+import { ContinuousReader, type ReaderAction } from "./continuous-reader";
+import { searchBook, type ReaderTarget } from "./book-search";
+import { initReadingMarks, markChapter } from "./reading-marks";
 
 initFocus();
 
@@ -78,6 +81,7 @@ let revision = 0;
 let scrollTimer: ReturnType<typeof setTimeout> | undefined;
 let loadChannel = "";
 let readerReady = false;
+let selectedPassage: { index: number; fraction: number; anchor: TextAnchor } | undefined;
 let handshake:
   | {
       resolve: () => void;
@@ -85,7 +89,7 @@ let handshake:
       timer: ReturnType<typeof setTimeout>;
       fraction: number;
       fragment: string;
-      search?: SearchTarget;
+      search?: ReaderTarget;
     }
   | undefined;
 let snapshotNumber = 0;
@@ -143,7 +147,7 @@ $("#app").innerHTML = `
     </section>
     <div id="reader-workspace" hidden>
     <section id="reader-view" class="reader-view">
-      <div class="reader-caption"><span id="chapter-caption"></span><div class="reader-caption-actions"><button type="button" id="continuous-mode" class="quiet-button" aria-pressed="false" hidden>连续滚动</button><button type="button" id="book-search" class="quiet-button" aria-keyshortcuts="Meta+F Control+F" hidden>书内查找</button><button type="button" id="poetry" class="quiet-button" aria-pressed="false" hidden>诗歌排版</button><button type="button" id="html-source" class="quiet-button" hidden>HTML 原文</button><button type="button" id="export-text" class="quiet-button" hidden>导出 HTML</button><wa-button id="browser-reading" class="quiet-button" size="s" hidden>浏览器共读</wa-button><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div></div>
+      <div class="reader-caption"><span id="chapter-caption"></span><div class="reader-caption-actions"><button type="button" id="continuous-mode" class="quiet-button" aria-pressed="false" hidden>连续滚动</button><button type="button" id="reading-marks" class="quiet-button" hidden>书签与批注</button><button type="button" id="book-search" class="quiet-button" aria-keyshortcuts="Meta+F Control+F" hidden>书内查找</button><button type="button" id="poetry" class="quiet-button" aria-pressed="false" hidden>诗歌排版</button><button type="button" id="html-source" class="quiet-button" hidden>HTML 原文</button><button type="button" id="export-text" class="quiet-button" hidden>导出 HTML</button><wa-button id="browser-reading" class="quiet-button" size="s" hidden>浏览器共读</wa-button><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div></div>
       <div id="chapter-loading" class="chapter-loading" role="status" hidden></div>
       <div id="pdf-tools" hidden>
         <form id="pdf-jump">
@@ -407,6 +411,8 @@ function readPosition(): Promise<number> {
   });
 }
 function clearReader() {
+  selectedPassage = undefined;
+  marksPanel.close();
   continuous?.dispose();
   continuous = undefined;
   $("#continuous-reader").hidden = true;
@@ -456,6 +462,7 @@ window.addEventListener("message", (e) => {
       fraction: handshake.fraction,
       fragment: handshake.fragment,
       search: handshake.search,
+      marks: annotationsAt(chapter),
       finalSection: chapter === book.chapters.length - 1,
     });
   else if (m.type === "initialized" && handshake) {
@@ -491,8 +498,31 @@ function scheduleProgress() {
 function resourceBase(token: string, path: string) {
   return convertFileSrc("", "epub") + token + "/" + path.split("/").map(encodeURIComponent).join("/");
 }
-function handleReaderAction(index: number, m: { type: string; href?: string; direction?: number }) {
+function annotationsAt(index: number) {
+  if (!book) return [];
+  const current = book;
+  return (current.reading_marks ?? []).filter((mark) => mark.anchor && markChapter(current, mark) === index);
+}
+function handleReaderAction(index: number, m: ReaderAction) {
   if (!book) return;
+  if (m.type === "ready") {
+    continuous?.showMarks(annotationsAt, index);
+    return;
+  }
+  if (m.type === "selection") {
+    if ($<HTMLDialogElement>("#reading-marks-dialog").open) return;
+    const anchor = m.anchor;
+    if (anchor && typeof anchor.quote === "string" && anchor.quote.length > 0 && anchor.quote.length <= 2000 &&
+        typeof anchor.prefix === "string" && typeof anchor.suffix === "string" && Number.isSafeInteger(anchor.start) && anchor.start >= 0) {
+      const value = continuous ? continuous.fractionAt(index, m.offset ?? 0) : m.fraction ?? fraction;
+      selectedPassage = { index, fraction: Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fraction, anchor };
+    } else if (selectedPassage?.index === index) selectedPassage = undefined;
+    return;
+  }
+  if (m.type === "mark-missing") {
+    showError("原文已有变化，无法定位这条批注，已打开保存的章节。");
+    return;
+  }
   if (m.type === "navigate" && (m.direction === -1 || m.direction === 1))
     void navigate(chapter + m.direction);
   else if (m.type === "open") void pickBook();
@@ -556,6 +586,7 @@ $("#browser-reading").onclick = async () => {
 
 function updatePosition() {
   updateBrowserReading();
+  $<HTMLButtonElement>("#reading-marks").disabled = !readerReady || loadingChapter;
   if (!book) return;
   if (paged) {
     const progress = readingPercent((chapter + 1) / paged.pages);
@@ -669,6 +700,7 @@ async function presentBook(opened: Book) {
     return;
   }
   const isPagedBook = isPaged(opened);
+  $("#reading-marks").hidden = false;
   const isEpub = /\.epub$/i.test(opened.path);
   $("#book-search").hidden = !(isEpub || isMarkdown(opened.path) || isHtml(opened.path) ||
     /\.txt$/i.test(opened.path) || opened.chapters.some((section) => section.path.startsWith("sections/") && isMarkdown(section.path)));
@@ -731,7 +763,7 @@ function readerCSS() {
   const highlighter = settings.theme === "night"
     ? ".hljs-keyword,.hljs-title,.hljs-built_in{color:#d3aaff}.hljs-string,.hljs-regexp{color:#a7d29c}.hljs-number,.hljs-literal{color:#e4b387}.hljs-comment{color:#aeb7aa}"
     : "";
-  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}::highlight(leaf-search){background:#ffdb79;color:#292017}::selection{background:#b9c7a8;color:#1f3020}p.plain-text{white-space:pre-line}${transcriptCSS}${markdownCSS}${highlighter}${book?.metadata?.poetry ? poetryCSS : ""}`;
+  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}mark.leaf-annotation{background:transparent;color:inherit}mark.leaf-annotation-highlight{background:#ffe2a1;color:#2e2514}mark.leaf-annotation-underline{text-decoration:underline solid #96702f 2px;text-underline-offset:.2em}::highlight(leaf-search){background:#ffdb79;color:#292017}::selection{background:#b9c7a8;color:#1f3020}p.plain-text{white-space:pre-line}${transcriptCSS}${markdownCSS}${highlighter}${book?.metadata?.poetry ? poetryCSS : ""}`;
 }
 async function buildChapter(
   source: string, path: string, loadId: string, index: number, current: Book, streaming = false,
@@ -869,7 +901,7 @@ async function buildChapter(
   doc.documentElement.lang ||= "zh-CN";
   return "<!doctype html>" + doc.documentElement.outerHTML;
 }
-async function renderChapter(index: number, targetFraction = 0, fragment = "", search?: SearchTarget) {
+async function renderChapter(index: number, targetFraction = 0, fragment = "", search?: ReaderTarget) {
   if (!book) return;
   const ticket = ++revision;
   exportSnapshot = undefined;
@@ -1009,7 +1041,7 @@ $("#pdf-viewport").onpointerdown = () => tocSidebar.dismissTemporary();
 function useContinuousReader() {
   return settings.continuousEpub && !!book && /\.epub$/i.test(book.path);
 }
-async function renderFlow(index: number, value = 0, fragment = "", search?: SearchTarget) {
+async function renderFlow(index: number, value = 0, fragment = "", search?: ReaderTarget) {
   const current = book;
   if (!current) return;
   const streaming = useContinuousReader();
@@ -1044,6 +1076,7 @@ async function renderFlow(index: number, value = 0, fragment = "", search?: Sear
       showError,
     );
   }
+  selectedPassage = undefined;
   chapter = index;
   fraction = value;
   $("#chapter-caption").textContent = current.chapters[index].title;
@@ -1150,7 +1183,43 @@ $<HTMLFormElement>("#book-search-form").onsubmit = async (event) => {
   }
 };
 
-async function navigate(index: number, targetFraction = 0, fragment = "", search?: SearchTarget) {
+const marksPanel = initReadingMarks(
+  async (edit) => {
+    const current = book;
+    if (!current) throw new Error("书籍已关闭");
+    const updated = await invoke<ReadingMark[]>("edit_reading_marks", { token: current.token, edit });
+    if (book !== current) return;
+    current.reading_marks = updated;
+    selectedPassage = undefined;
+    if (continuous) continuous.showMarks(annotationsAt);
+    else if (!paged) sendReader("marks", { marks: annotationsAt(chapter) });
+  },
+  (mark) => {
+    if (!book) return;
+    const index = markChapter(book, mark);
+    if (index < 0 || index >= (paged?.pages ?? book.chapters.length)) {
+      showError("书签所在的页或章节已不存在。");
+      return;
+    }
+    marksPanel.close();
+    void navigate(index, mark.fraction, "", mark.anchor ? { anchor: mark.anchor } : undefined);
+  },
+  async () => {
+    if (!readerReady) throw new Error("请等待正文加载");
+    const position = continuous?.position() ?? { chapter, fraction: paged ? 1 : await readPosition() };
+    return { action: "add", ...position, style: "underline", anchor: null, note: "" };
+  },
+  () => selectedPassage ? {
+    action: "add", chapter: selectedPassage.index, fraction: selectedPassage.fraction,
+    anchor: selectedPassage.anchor, style: "underline", note: "",
+  } : undefined,
+);
+$("#reading-marks").onclick = () => {
+  if (!book || !readerReady || loadingChapter || busy) return;
+  marksPanel.open(book, !paged);
+};
+
+async function navigate(index: number, targetFraction = 0, fragment = "", search?: ReaderTarget) {
   if (
     !book ||
     busy ||
