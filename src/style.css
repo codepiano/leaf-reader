@@ -2021,3 +2021,60 @@ wa-button.danger-button::part(button) { background: #945348; border-color: #9453
 #metadata-lookup-candidates dd {
   margin: 0;
 }
+
+#continuous-reader {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overflow-anchor: none;
+  position: relative;
+}
+#continuous-reader iframe {
+  display: block;
+  flex: none;
+}
+#continuous-mode[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--ink);
+}
+#book-search-dialog {
+  inline-size: min(34rem, calc(100% - 32px));
+}
+.book-search-field {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.book-search-field input {
+  flex: 1;
+  min-inline-size: 0;
+}
+#book-search-results {
+  max-block-size: min(55vh, 30rem);
+  overflow: auto;
+  padding: 0 3px 3px;
+  margin: 0;
+  list-style: none;
+}
+#book-search-results:empty {
+  display: none;
+}
+#book-search-results button {
+  display: grid;
+  gap: 5px;
+  inline-size: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-block-start: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+#book-search-results button:hover {
+  background: var(--hover);
+}
+#book-search-results span {
+  color: var(--muted);
+}

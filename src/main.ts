@@ -27,6 +27,8 @@ import { ReadingClock } from "./reading-clock";
 import { initBookInfo, showBookInfo } from "./book-info";
 import { initLibrarySettings } from "./library-settings";
 import type { PagedReader } from "./paged-reader";
+import { ContinuousReader } from "./continuous-reader";
+import { searchBook, type SearchTarget } from "./book-search";
 
 initFocus();
 
@@ -36,6 +38,7 @@ type Settings = {
   width: number;
   theme: "paper" | "white" | "night";
   serif: boolean;
+  continuousEpub: boolean;
 };
 const defaults: Settings = {
   size: 19,
@@ -43,6 +46,7 @@ const defaults: Settings = {
   width: 680,
   theme: "paper",
   serif: true,
+  continuousEpub: false,
 };
 function loadSettings(): Settings {
   try {
@@ -53,6 +57,7 @@ function loadSettings(): Settings {
       width: Math.min(900, Math.max(480, Number(s.width) || 680)),
       theme: ["paper", "white", "night"].includes(s.theme) ? s.theme : "paper",
       serif: s.serif !== false,
+      continuousEpub: s.continuousEpub === true,
     };
   } catch {
     return { ...defaults };
@@ -61,6 +66,7 @@ function loadSettings(): Settings {
 let settings = loadSettings();
 let book: Book | null = null;
 let paged: PagedReader | undefined;
+let continuous: ContinuousReader | undefined;
 let browserReading = false;
 let browserRequestPending = false;
 let chapter = 0;
@@ -72,7 +78,6 @@ let revision = 0;
 let scrollTimer: ReturnType<typeof setTimeout> | undefined;
 let loadChannel = "";
 let readerReady = false;
-let chapterBase = "";
 let handshake:
   | {
       resolve: () => void;
@@ -80,6 +85,7 @@ let handshake:
       timer: ReturnType<typeof setTimeout>;
       fraction: number;
       fragment: string;
+      search?: SearchTarget;
     }
   | undefined;
 let snapshotNumber = 0;
@@ -137,7 +143,7 @@ $("#app").innerHTML = `
     </section>
     <div id="reader-workspace" hidden>
     <section id="reader-view" class="reader-view">
-      <div class="reader-caption"><span id="chapter-caption"></span><div class="reader-caption-actions"><button type="button" id="poetry" class="quiet-button" aria-pressed="false" hidden>诗歌排版</button><button type="button" id="html-source" class="quiet-button" hidden>HTML 原文</button><button type="button" id="export-text" class="quiet-button" hidden>导出 HTML</button><wa-button id="browser-reading" class="quiet-button" size="s" hidden>浏览器共读</wa-button><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div></div>
+      <div class="reader-caption"><span id="chapter-caption"></span><div class="reader-caption-actions"><button type="button" id="continuous-mode" class="quiet-button" aria-pressed="false" hidden>连续滚动</button><button type="button" id="book-search" class="quiet-button" aria-keyshortcuts="Meta+F Control+F" hidden>书内查找</button><button type="button" id="poetry" class="quiet-button" aria-pressed="false" hidden>诗歌排版</button><button type="button" id="html-source" class="quiet-button" hidden>HTML 原文</button><button type="button" id="export-text" class="quiet-button" hidden>导出 HTML</button><wa-button id="browser-reading" class="quiet-button" size="s" hidden>浏览器共读</wa-button><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div></div>
       <div id="chapter-loading" class="chapter-loading" role="status" hidden></div>
       <div id="pdf-tools" hidden>
         <form id="pdf-jump">
@@ -154,6 +160,7 @@ $("#app").innerHTML = `
         </div>
       </div>
       <iframe id="reader" title="书籍正文" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
+      <div id="continuous-reader" role="region" aria-label="连续滚动正文" tabindex="0" hidden></div>
       <div id="pdf-viewport" role="region" aria-label="分页正文" tabindex="0" hidden></div>
       <footer class="reader-footer"><wa-button id="prev" class="quiet-button" size="small">${icon("left")}<span id="prev-label">上一章</span></wa-button><div><span id="position"></span><progress id="reading-progress" class="progress-track" max="100" value="0" aria-label="阅读进度"></progress></div><wa-button id="next" class="quiet-button" size="small"><span id="next-label">下一章</span>${icon("right")}</wa-button></footer>
     </section>
@@ -174,6 +181,17 @@ document.body.insertAdjacentHTML(
   `<dialog id="collection-dialog" class="app-dialog collection-dialog"><div class="dialog-heading"><div><div class="eyebrow">合集模式</div><h2>选择要作为子书的目录</h2></div><wa-button id="collection-close" class="icon-button" aria-label="关闭合集设置" size="s">×</wa-button></div><p class="dialog-description">逻辑拆分，共用原 EPUB；每本子书单独记录进度。不会生成或改写 EPUB 文件。</p><p class="field-hint">默认只展示第一层，点击箭头逐级展开。勾选子书的起始分组；未链接的标题将使用其第一段正文作为起点。首个起点之前的内容保留在合集“附加内容”中，不计为子书。</p><div id="collection-candidates"></div><p id="collection-selection" class="field-hint"></p><p id="collection-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="collection-disable" class="quiet-button" size="s" hidden>恢复整本阅读</wa-button><wa-button id="collection-apply" class="primary-button" size="s">转为合集模式</wa-button></div></dialog>`,
 );
 document.body.insertAdjacentHTML("beforeend", `
+  <dialog id="book-search-dialog" class="app-dialog advanced-dialog" aria-labelledby="book-search-title">
+    <div class="dialog-heading"><h2 id="book-search-title">书内查找</h2><button type="button" id="book-search-close" class="icon-button" aria-label="关闭查找">${icon("close")}</button></div>
+    <form id="book-search-form">
+      <div class="book-search-field">
+        <input id="book-search-term" class="field-input" type="search" aria-label="查找词" placeholder="输入要查找的文字" required maxlength="160" autofocus>
+        <button type="submit" class="primary-button">查找</button>
+      </div>
+    </form>
+    <p id="book-search-status" class="field-hint" role="status"></p>
+    <ol id="book-search-results" aria-label="查找结果"></ol>
+  </dialog>
   <dialog id="github-dialog" class="app-dialog advanced-dialog" aria-labelledby="github-title">
     <div class="dialog-heading"><h2 id="github-title">GitHub 书籍</h2></div>
     <form id="github-form">
@@ -389,6 +407,11 @@ function readPosition(): Promise<number> {
   });
 }
 function clearReader() {
+  continuous?.dispose();
+  continuous = undefined;
+  $("#continuous-reader").hidden = true;
+  searchRequest?.abort();
+  if (searchDialog.open) searchDialog.close();
   readingClock.pause();
   readerReady = false;
   if (handshake) {
@@ -408,12 +431,13 @@ function flushProgress() {
   if (!book || loadingChapter || !readerReady)
     return Promise.all([saveChain, readingClock.flush()]);
   const token = book.token;
-  const index = chapter;
+  const streamPosition = continuous?.position();
+  const index = streamPosition?.chapter ?? chapter;
   saveChain = saveChain
     .catch(() => {})
     .then(async () => {
       await readingClock.flush();
-      const value = paged ? 1 : await readPosition();
+      const value = streamPosition?.fraction ?? (paged ? 1 : await readPosition());
       await invoke("save_progress", { token, chapter: index, fraction: value });
     });
   return saveChain;
@@ -431,6 +455,7 @@ window.addEventListener("message", (e) => {
     sendReader("init", {
       fraction: handshake.fraction,
       fragment: handshake.fragment,
+      search: handshake.search,
       finalSection: chapter === book.chapters.length - 1,
     });
   else if (m.type === "initialized" && handshake) {
@@ -454,21 +479,30 @@ window.addEventListener("message", (e) => {
         pending.resolve(fraction);
         snapshots.delete(m.request);
       }
-    } else if (!loadingChapter) {
-      clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        void flushProgress().catch(showError);
-      }, 350);
-    }
-  } else if (m.type === "navigate" && (m.direction === -1 || m.direction === 1))
+    } else if (!loadingChapter) scheduleProgress();
+  } else {
+    handleReaderAction(chapter, m);
+  }
+});
+function scheduleProgress() {
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => void flushProgress().catch(showError), 350);
+}
+function resourceBase(token: string, path: string) {
+  return convertFileSrc("", "epub") + token + "/" + path.split("/").map(encodeURIComponent).join("/");
+}
+function handleReaderAction(index: number, m: { type: string; href?: string; direction?: number }) {
+  if (!book) return;
+  if (m.type === "navigate" && (m.direction === -1 || m.direction === 1))
     void navigate(chapter + m.direction);
   else if (m.type === "open") void pickBook();
+  else if (m.type === "find") openBookSearch();
   else if (m.type === "escape") closeReaderOverlay();
   else if (m.type === "pointerdown") tocSidebar.dismissTemporary();
   else if (m.type === "link" && typeof m.href === "string") {
     try {
-      const url = new URL(m.href, chapterBase);
-      const base = new URL(chapterBase);
+      const base = new URL(resourceBase(book.token, book.chapters[index].path));
+      const url = new URL(m.href, base);
       if (
         url.protocol !== base.protocol ||
         url.host !== base.host ||
@@ -479,7 +513,8 @@ window.addEventListener("message", (e) => {
         .split("/")
         .slice(2)
         .join("/");
-      let target = book.chapters.findIndex((c) => c.path === path);
+      let target = path === book.chapters[index].path
+        ? index : book.chapters.findIndex((c) => c.path === path);
       if (target < 0 && path.startsWith("sections/")) {
         const prefix = path.replace(/\/$/, "") + "/";
         target = book.chapters.findIndex((c) =>
@@ -491,7 +526,7 @@ window.addEventListener("message", (e) => {
       showError("无法打开此书内链接；外部链接保持关闭。");
     }
   }
-});
+}
 function updateBrowserReading() {
   const control = $<WaButton>("#browser-reading");
   control.hidden = !book || isPaged(book);
@@ -634,6 +669,9 @@ async function presentBook(opened: Book) {
     return;
   }
   const isPagedBook = isPaged(opened);
+  const isEpub = /\.epub$/i.test(opened.path);
+  $("#book-search").hidden = !isEpub;
+  $("#continuous-mode").hidden = !isEpub;
   $("#reader").hidden = isPagedBook;
   $("#pdf-viewport").hidden = !isPagedBook;
   $("#pdf-tools").hidden = true;
@@ -660,7 +698,7 @@ async function presentBook(opened: Book) {
     return;
   }
   tocTree.render(book, navigateFromToc, openPartFromToc);
-  await renderChapter(chapter, fraction);
+  await renderFlow(chapter, fraction);
 }
 async function pickBook(directory = false) {
   if (busy) return;
@@ -692,9 +730,11 @@ function readerCSS() {
   const highlighter = settings.theme === "night"
     ? ".hljs-keyword,.hljs-title,.hljs-built_in{color:#d3aaff}.hljs-string,.hljs-regexp{color:#a7d29c}.hljs-number,.hljs-literal{color:#e4b387}.hljs-comment{color:#aeb7aa}"
     : "";
-  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}::selection{background:#b9c7a8;color:#1f3020}p.plain-text{white-space:pre-line}${transcriptCSS}${markdownCSS}${highlighter}${book?.metadata?.poetry ? poetryCSS : ""}`;
+  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}::highlight(leaf-search){background:#ffdb79;color:#292017}::selection{background:#b9c7a8;color:#1f3020}p.plain-text{white-space:pre-line}${transcriptCSS}${markdownCSS}${highlighter}${book?.metadata?.poetry ? poetryCSS : ""}`;
 }
-async function buildChapter(source: string, path: string, loadId: string) {
+async function buildChapter(
+  source: string, path: string, loadId: string, index: number, current: Book, streaming = false,
+) {
   // Keep publisher styles, but never grant book markup scripts, forms, IPC or networking.
   // A template is inert even for images. DOMParser alone can fetch resources before sanitization.
   const template = document.createElement("template");
@@ -740,12 +780,12 @@ async function buildChapter(source: string, path: string, loadId: string) {
   doc.body
     .querySelectorAll("style,link,title")
     .forEach((el) => doc.head.append(el));
-  const markdownBook = isMarkdown(book!.path) || (path.startsWith("sections/") && isMarkdown(path));
-  headingOutline = [];
-  if (!/\.(epub|mobi|azw3)$/i.test(book!.path)) {
+  const markdownBook = isMarkdown(current.path) || (path.startsWith("sections/") && isMarkdown(path));
+  if (!streaming) headingOutline = [];
+  if (!/\.(epub|mobi|azw3)$/i.test(current.path)) {
     const nodes = [...doc.body.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6")];
     const used = new Set([...doc.querySelectorAll("[id]")].map((el) => el.id));
-    const htmlBook = isHtml(book!.path);
+    const htmlBook = isHtml(current.path);
     const headings: Toc[] = [];
     const parents: { level: number; item: Toc }[] = [];
     for (const node of nodes) {
@@ -762,7 +802,7 @@ async function buildChapter(source: string, path: string, loadId: string) {
       if (markdownBook) node.classList.add("leaf-poem-title");
       const level = Number(node.tagName[1]);
       while (parents.length && parents.at(-1)!.level >= level) parents.pop();
-      const item = { id: `heading-${chapter}-${node.id}`, title, chapter, fragment: node.id, children: [] };
+      const item = { id: `heading-${index}-${node.id}`, title, chapter: index, fragment: node.id, children: [] };
       (parents.at(-1)?.item.children ?? headings).push(item);
       parents.push({ level, item });
     }
@@ -773,7 +813,7 @@ async function buildChapter(source: string, path: string, loadId: string) {
     const { enhanceMarkdown } = await import("./markdown-rich");
     await enhanceMarkdown(doc.body);
   }
-  const scope = book!.chapters[chapter];
+  const scope = current.chapters[index];
   if (scope?.start_fragment || scope?.end_fragment) {
     const start = scope.start_fragment
       ? doc.getElementById(scope.start_fragment)
@@ -795,12 +835,9 @@ async function buildChapter(source: string, path: string, loadId: string) {
   // convertFileSrc encodes slashes as %2F. Use it for the platform origin only;
   // resource paths must keep separators for relative CSS/images/links to resolve.
   const base = doc.createElement("base");
-  base.href =
-    convertFileSrc("", "epub") +
-    `${book!.token}/${path.split("/").map(encodeURIComponent).join("/")}`;
-  chapterBase = base.href;
-  if (markdownBook || isHtml(book!.path) || /\.txt$/i.test(book!.path)) {
-    exportSnapshot = { token: book!.token, body: doc.body.cloneNode(true) as HTMLElement, base: base.href };
+  base.href = resourceBase(current.token, path);
+  if (markdownBook || isHtml(current.path) || /\.txt$/i.test(current.path)) {
+    exportSnapshot = { token: current.token, body: doc.body.cloneNode(true) as HTMLElement, base: base.href };
   }
   const bridgeUrl = new URL("reader-bridge.js", document.baseURI).href;
   // Opaque sandbox origin: the book has no parent DOM or IPC access. Only the
@@ -818,14 +855,20 @@ async function buildChapter(source: string, path: string, loadId: string) {
   style.textContent = readerCSS();
 
   doc.head.append(style);
+  if (streaming) {
+    const layout = doc.createElement("style");
+    layout.textContent = "html{height:auto!important;overflow:hidden!important}body{height:auto!important;min-height:0!important;padding-block:24px!important;display:flow-root!important;overflow:visible!important}";
+    doc.head.append(layout);
+  }
   const bridge = doc.createElement("script");
   bridge.src = bridgeUrl;
   bridge.dataset.channel = loadId;
+  bridge.dataset.stream = String(streaming);
   doc.body.append(bridge);
   doc.documentElement.lang ||= "zh-CN";
   return "<!doctype html>" + doc.documentElement.outerHTML;
 }
-async function renderChapter(index: number, targetFraction = 0, fragment = "") {
+async function renderChapter(index: number, targetFraction = 0, fragment = "", search?: SearchTarget) {
   if (!book) return;
   const ticket = ++revision;
   exportSnapshot = undefined;
@@ -841,7 +884,7 @@ async function renderChapter(index: number, targetFraction = 0, fragment = "") {
     if (ticket !== revision || !book) return;
     const loadId = `${book.token}-${ticket}`;
     chapter = index;
-    const srcdoc = await buildChapter(source, book.chapters[index].path, loadId);
+    const srcdoc = await buildChapter(source, book.chapters[index].path, loadId, index, book);
     if (ticket !== revision || !book) return;
     clearReader();
     const iframe = $<HTMLIFrameElement>("#reader");
@@ -860,6 +903,7 @@ async function renderChapter(index: number, targetFraction = 0, fragment = "") {
         timer,
         fraction: targetFraction,
         fragment,
+        search,
       };
       iframe.srcdoc = srcdoc;
     });
@@ -961,7 +1005,151 @@ for (const [id, factor] of [["pdf-zoom-out", 1 / 1.25], ["pdf-zoom-in", 1.25]] a
 $("#pdf-fit").onclick = () => void renderPage(chapter, null).catch(showError);
 $("#pdf-viewport").onpointerdown = () => tocSidebar.dismissTemporary();
 
-async function navigate(index: number, targetFraction = 0, fragment = "") {
+function useContinuousReader() {
+  return settings.continuousEpub && !!book && /\.epub$/i.test(book.path);
+}
+async function renderFlow(index: number, value = 0, fragment = "", search?: SearchTarget) {
+  const current = book;
+  if (!current) return;
+  const streaming = useContinuousReader();
+  $("#continuous-mode").setAttribute("aria-pressed", String(streaming));
+  $("#reader").hidden = streaming;
+  $("#continuous-reader").hidden = !streaming;
+  if (!streaming) {
+    await renderChapter(index, value, fragment, search);
+    return;
+  }
+  if (!continuous) {
+    $<HTMLIFrameElement>("#reader").srcdoc = "";
+    continuous = new ContinuousReader(
+      $("#continuous-reader"),
+      current.chapters.length,
+      async (i, channel) => {
+        const source = await invoke<string>("get_chapter", { token: current.token, index: i });
+        return buildChapter(source, current.chapters[i].path, channel, i, current, true);
+      },
+      (i) => current.chapters[i].title,
+      (position) => {
+        if (position.chapter !== chapter)
+          $("#chapter-caption").textContent = current.chapters[position.chapter].title;
+        if (position.chapter !== chapter || position.fraction !== fraction) {
+          chapter = position.chapter;
+          fraction = position.fraction;
+          updatePosition();
+          if (readerReady && !loadingChapter) scheduleProgress();
+        }
+      },
+      handleReaderAction,
+      showError,
+    );
+  }
+  chapter = index;
+  fraction = value;
+  $("#chapter-caption").textContent = current.chapters[index].title;
+  loadingChapter = true;
+  $("#chapter-loading").hidden = false;
+  updatePosition();
+  try {
+    await continuous.open(index, value, fragment, search);
+    if (book !== current) return;
+    readerReady = true;
+    readingClock.resume(current.token, current.track_reading_time ?? true);
+    tocTree.active(chapter, true);
+  } catch (error) {
+    showError(error);
+  } finally {
+    loadingChapter = false;
+    $("#chapter-loading").hidden = true;
+    if (book === current) updatePosition();
+  }
+}
+
+$<HTMLButtonElement>("#continuous-mode").onclick = async () => {
+  const button = $<HTMLButtonElement>("#continuous-mode");
+  if (!book || busy || loadingChapter || button.disabled) return;
+  button.disabled = true;
+  busy = true;
+  try {
+    await flushProgress();
+    const position = continuous?.position() ?? { chapter, fraction };
+    clearReader();
+    settings.continuousEpub = !settings.continuousEpub;
+    localStorage.setItem("leaf.settings", JSON.stringify(settings));
+    await renderFlow(position.chapter, position.fraction);
+    await flushProgress();
+  } catch (error) {
+    showError(error);
+  } finally {
+    busy = false;
+    button.disabled = false;
+    updateBrowserReading();
+  }
+};
+
+const searchDialog = $<HTMLDialogElement>("#book-search-dialog");
+const searchTerm = $<HTMLInputElement>("#book-search-term");
+const searchResults = $("#book-search-results");
+const searchStatus = $("#book-search-status");
+let searchRequest: AbortController | undefined;
+let searchedBook: Book | null = null;
+function openBookSearch() {
+  if (!book || $("#book-search").hidden || $("#reader-workspace").hidden || document.querySelector("dialog[open]")) return;
+  if (searchedBook !== book) {
+    searchedBook = book;
+    searchTerm.value = "";
+    searchStatus.textContent = "";
+    searchResults.replaceChildren();
+  }
+  searchDialog.showModal();
+  searchTerm.select();
+}
+$("#book-search").onclick = openBookSearch;
+$("#book-search-close").onclick = () => searchDialog.close();
+searchDialog.onclose = () => {
+  if (!searchDialog.open && searchRequest) {
+    searchRequest.abort();
+    searchRequest = undefined;
+    searchStatus.textContent = "";
+  }
+};
+$<HTMLFormElement>("#book-search-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const current = book;
+  const query = searchTerm.value.trim();
+  if (!current || !query) return;
+  searchRequest?.abort();
+  const request = new AbortController();
+  searchRequest = request;
+  searchResults.replaceChildren();
+  searchStatus.textContent = "正在查找…";
+  try {
+    const hits = await searchBook(current, query, request.signal);
+    if (request.signal.aborted || current !== book) return;
+    searchStatus.textContent = hits.length === 80 ? "显示前 80 条结果" : hits.length ? `${hits.length} 条结果` : "未找到匹配的正文";
+    for (const { chapter: index, excerpt, target } of hits) {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      const title = document.createElement("strong");
+      title.textContent = current.chapters[index].title;
+      const snippet = document.createElement("span");
+      snippet.textContent = excerpt;
+      button.append(title, snippet);
+      button.onclick = () => {
+        searchDialog.close();
+        void navigate(index, 0, "", target);
+      };
+      item.append(button);
+      searchResults.append(item);
+    }
+  } catch {
+    if (!request.signal.aborted) searchStatus.textContent = "无法查找正文，请重试";
+  } finally {
+    if (searchRequest === request) searchRequest = undefined;
+  }
+};
+
+async function navigate(index: number, targetFraction = 0, fragment = "", search?: SearchTarget) {
   if (
     !book ||
     busy ||
@@ -976,7 +1164,7 @@ async function navigate(index: number, targetFraction = 0, fragment = "") {
       return;
     }
     await flushProgress();
-    await renderChapter(index, targetFraction, fragment);
+    await renderFlow(index, targetFraction, fragment, search);
     await flushProgress();
   } catch (e) {
     showError(e);
@@ -1053,11 +1241,17 @@ function applySettings() {
       String(el.dataset.theme === settings.theme),
     );
   });
-  if (book) sendReader("style", { css: readerCSS() });
+  if (continuous) continuous.style(readerCSS());
+  else if (book) sendReader("style", { css: readerCSS() });
   localStorage.setItem("leaf.settings", JSON.stringify(settings));
 }
 function onKey(e: KeyboardEvent) {
   if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f" && book && !$("#book-search").hidden && !$("#reader-workspace").hidden) {
+    e.preventDefault();
+    openBookSearch();
+    return;
+  }
   const target = e.target as HTMLElement;
   if (
     target.matches(
@@ -1084,6 +1278,7 @@ function onKey(e: KeyboardEvent) {
       e.preventDefault();
       const direction = e.key === "PageUp" || e.shiftKey ? -1 : 1;
       if (paged) void navigate(chapter + direction);
+      else if (continuous) continuous.scroll(direction * $("#continuous-reader").clientHeight * 0.85);
       else sendReader("scroll", { direction });
     }
   }
@@ -1104,7 +1299,8 @@ $<HTMLButtonElement>("#poetry").onclick = () => {
       current.metadata.poetry = enabled;
       updatePoetry();
       refreshTextToc();
-      sendReader("style", { css: readerCSS() });
+      if (continuous) continuous.style(readerCSS());
+      else sendReader("style", { css: readerCSS() });
     } catch (e) {
       showError(e);
     } finally {
