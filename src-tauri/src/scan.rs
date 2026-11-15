@@ -210,6 +210,7 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
                 }
             }
             let metadata = match format {
+                Kind::Kindle => kindle::inspect(&path),
                 Kind::Epub => {
                     Book::open(&path).map(|book| (book.title, book.author, book.chapters.len()))
                 }

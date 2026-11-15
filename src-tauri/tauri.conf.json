@@ -28,6 +28,12 @@
     "active": true,
     "targets": "all",
     "category": "Education",
+    "externalBin": ["binaries/leaf-mobitool"],
+    "resources": {
+      "vendor/libmobi/COPYING": "libmobi/COPYING",
+      "vendor/libmobi/GPL-3.0.txt": "libmobi/GPL-3.0.txt",
+      "vendor/libmobi/README.leaf.md": "libmobi/README.leaf.md"
+    },
     "shortDescription": "轻巧、安静的本地电子书阅读器",
     "icon": [
       "icons/icon.png",

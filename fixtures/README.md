@@ -9,3 +9,8 @@
 - `browser-catalog.json`：Rust 解析器导出的浏览器契约数据；路径、会话标记和打开时间已归一化为测试值。
 
 新增回归材料应使用原创或合成内容，并尽量保持体积小。
+
+`kindle-sample.mobi` and `kindle-sample.azw3` are the MOBI6 and KF8 halves
+of libmobi's synthetic [NCX test book](https://github.com/bfabiszewski/libmobi/blob/906274205c11944b628da1c553b255acb1af7c55/tests/samples/sample-ncx.mobi).
+They were split with upstream `mobitool -t`. The libmobi notices and licenses
+are in `src-tauri/vendor/libmobi`.

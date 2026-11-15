@@ -10,6 +10,7 @@ const OPTIONS: Options = Options::ENABLE_TABLES
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Epub,
+    Kindle,
     Pdf,
     Markdown,
     MarkdownDirectory,
@@ -29,6 +30,7 @@ impl Kind {
             .unwrap_or_default();
         match extension.to_ascii_lowercase().as_str() {
             "epub" => Ok(Self::Epub),
+            "mobi" | "azw3" => Ok(Self::Kindle),
             "pdf" => Ok(Self::Pdf),
             "cbz" => Ok(Self::Comic),
             "htm" | "html" => Ok(Self::Html),

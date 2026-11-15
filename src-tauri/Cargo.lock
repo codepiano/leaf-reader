@@ -1932,6 +1932,7 @@ name = "leaf-reader"
 version = "0.1.6"
 dependencies = [
  "ammonia",
+ "cc",
  "percent-encoding",
  "pulldown-cmark",
  "roxmltree",
@@ -1941,6 +1942,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
+ "tempfile",
  "tiny_http",
  "uuid",
  "zip",

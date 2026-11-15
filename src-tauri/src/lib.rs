@@ -5,6 +5,7 @@ mod comic;
 mod cover;
 mod details;
 mod epub;
+mod kindle;
 mod library_directory;
 mod pdf;
 mod reading_time;
@@ -85,6 +86,10 @@ struct Library {
 }
 enum SessionBook {
     Epub(Box<Book>),
+    Kindle {
+        book: Box<Book>,
+        _temporary: tempfile::TempDir,
+    },
     Pdf(pdf::Pdf),
     Comic(comic::Comic),
     Text(TextBook),
@@ -250,7 +255,7 @@ fn make_opened(
         None => None,
     };
     let (chapters, toc, candidates, weights, pdf_size) = match &mut session.book {
-        SessionBook::Epub(book) => {
+        SessionBook::Epub(book) | SessionBook::Kindle { book, .. } => {
             let (chapters, toc) = collection::view(book, part)?;
             let weights = if collection.enabled && part.is_none() {
                 Vec::new()
@@ -260,7 +265,11 @@ fn make_opened(
             (
                 chapters,
                 toc,
-                collection::candidates(&book.toc),
+                if epub {
+                    collection::candidates(&book.toc)
+                } else {
+                    Vec::new()
+                },
                 weights,
                 None,
             )
@@ -365,6 +374,13 @@ fn open_scoped_from(
     let kind = Kind::from_path(&canonical)?;
     let book = match kind {
         Kind::Epub => SessionBook::Epub(Box::new(Book::open(&canonical)?)),
+        Kind::Kindle => {
+            let (book, temporary) = kindle::open(&canonical)?;
+            SessionBook::Kindle {
+                book: Box::new(book),
+                _temporary: temporary,
+            }
+        }
         Kind::Pdf => SessionBook::Pdf(pdf::Pdf::open(&canonical)?),
         Kind::Comic => SessionBook::Comic(comic::Comic::open(&canonical)?),
         _ => SessionBook::Text(TextBook::open(&canonical, kind)?),
@@ -464,7 +480,9 @@ fn open_scoped_from(
     }
     let old = next.recent.iter().find(|r| r.id == id).cloned();
     let (title, author, chapters) = match &book {
-        SessionBook::Epub(book) => (book.title.clone(), book.author.clone(), book.chapters.len()),
+        SessionBook::Epub(book) | SessionBook::Kindle { book, .. } => {
+            (book.title.clone(), book.author.clone(), book.chapters.len())
+        }
         SessionBook::Text(book) => (book.title.clone(), String::new(), book.chapters.len()),
         SessionBook::Comic(comic) => (pdf::title(&canonical), String::new(), comic.len()),
         SessionBook::Pdf(_) => (
@@ -624,11 +642,9 @@ fn read_chapter(session: &mut Session, index: usize) -> Result<String, String> {
     let chapter = session.view_chapters.get(index).ok_or("章节不存在")?;
     match &mut session.book {
         SessionBook::Text(book) => book.read_chapter(index),
-        SessionBook::Epub(book) => String::from_utf8(epub::read(
-            &mut book.archive,
-            &chapter.path,
-            8 * 1024 * 1024,
-        )?)
+        SessionBook::Epub(book) | SessionBook::Kindle { book, .. } => String::from_utf8(
+            epub::read(&mut book.archive, &chapter.path, 8 * 1024 * 1024)?,
+        )
         .map_err(|_| "章节不是 UTF-8 编码".into()),
         SessionBook::Pdf(_) | SessionBook::Comic(_) => Err("此书按页阅读".into()),
     }
@@ -979,7 +995,10 @@ fn resource(app: &tauri::AppHandle, url: &str) -> Result<(Vec<u8>, &'static str)
         "otf" => "font/otf",
         _ => return Err("不支持此资源类型".into()),
     };
-    let book = session.book.epub_mut()?;
+    let book = match &mut session.book {
+        SessionBook::Epub(book) | SessionBook::Kindle { book, .. } => book,
+        _ => return Err("资源不存在".into()),
+    };
     Ok((
         epub::read(&mut book.archive, path, epub::RESOURCE_LIMIT)?,
         mime,

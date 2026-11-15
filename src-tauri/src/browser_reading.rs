@@ -148,7 +148,7 @@ fn content(
             return Err("无效的图片路径".into());
         }
         return match &mut session.book {
-            SessionBook::Epub(book) => Ok((
+            SessionBook::Epub(book) | SessionBook::Kindle { book, .. } => Ok((
                 epub::read(&mut book.archive, &asset, epub::RESOURCE_LIMIT)?,
                 mime,
             )),
@@ -166,7 +166,7 @@ fn content(
         .ok_or("章节不存在")?
         .clone();
     let title = match &session.book {
-        SessionBook::Epub(book) => &book.title,
+        SessionBook::Epub(book) | SessionBook::Kindle { book, .. } => &book.title,
         SessionBook::Text(book) => &book.title,
         SessionBook::Pdf(_) | SessionBook::Comic(_) => return Err("分页图书不支持共读".into()),
     }

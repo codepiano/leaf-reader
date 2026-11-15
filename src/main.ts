@@ -132,7 +132,7 @@ $("#app").innerHTML = `
       <div class="shelf-heading"><h2>我的书架 <span id="shelf-count">0 本</span></h2><span class="muted">最近阅读</span></div>
       <div id="shelf" class="shelf"></div>
       <div id="empty" class="empty-state"><div class="empty-art">${icon("book")}<span class="art-leaf">${icon("leaf")}</span></div><h2>下一段旅程，从这里开始</h2><p>打开一本书，把喜欢的文字放在手边。<br>也可以将文件拖到窗口中。</p><wa-button id="empty-open" class="primary-button" size="small">${icon("folder")}选择本地书籍</wa-button><wa-button id="demo" class="text-button" size="small">先读一段示例 ${icon("arrow")}</wa-button><div class="empty-foot">无需账号 · 无需联网 · 只专注阅读</div></div>
-      <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB · PDF · CBZ · HTML · Markdown · TXT</span></footer>
+      <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB · MOBI · AZW3 · PDF · CBZ · HTML · Markdown · TXT</span></footer>
     </section>
     <div id="reader-workspace" hidden>
     <section id="reader-view" class="reader-view">
@@ -617,7 +617,7 @@ async function pickBook(directory = false) {
     const path = await open({
       multiple: false,
       directory,
-      ...(directory ? {} : { filters: [{ name: "电子书", extensions: ["epub", "pdf", "cbz", "htm", "html", "md", "markdown", "txt"] }] }),
+      ...(directory ? {} : { filters: [{ name: "电子书", extensions: ["epub", "mobi", "azw3", "pdf", "cbz", "htm", "html", "md", "markdown", "txt"] }] }),
     });
     if (typeof path === "string") await openPath(path, false, undefined, true);
   } catch (e) {
@@ -685,7 +685,7 @@ function buildChapter(source: string, path: string, loadId: string) {
   doc.body
     .querySelectorAll("style,link,title")
     .forEach((el) => doc.head.append(el));
-  if (!/\.epub$/i.test(book!.path)) {
+  if (!/\.(epub|mobi|azw3)$/i.test(book!.path)) {
     const nodes = [...doc.body.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6")];
     const used = new Set([...doc.querySelectorAll("[id]")].map((el) => el.id));
     const htmlBook = /\.html?$/i.test(book!.path);
@@ -1124,7 +1124,7 @@ if (isTauri()) {
       e.payload.type !== "over" && e.payload.type !== "enter";
     if (e.payload.type === "drop") {
       const path = e.payload.paths.find((p) =>
-        /\.(epub|pdf|cbz|html?|md|markdown|txt)$/i.test(p),
+        /\.(epub|mobi|azw3|pdf|cbz|html?|md|markdown|txt)$/i.test(p),
       ) ?? e.payload.paths[0];
       if (path) void openPath(path, false, undefined, true);
     }

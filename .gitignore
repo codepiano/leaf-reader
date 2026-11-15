@@ -3,6 +3,7 @@ node_modules/
 dist/
 target/
 src-tauri/gen/
+/src-tauri/binaries/
 *.local
 test-results/
 playwright-report/
@@ -23,3 +24,7 @@ __pycache__/
 !/fixtures/*.epub
 *.pdf
 !/fixtures/paged-sample.pdf
+*.mobi
+*.azw3
+!/fixtures/*.mobi
+!/fixtures/*.azw3

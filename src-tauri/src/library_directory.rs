@@ -122,6 +122,9 @@ pub fn source(state: &ReaderState, path: &Path, importing: bool) -> Result<PathB
     // Validate before creating a copy, so malformed books do not enter the library directory.
     match format {
         Kind::Epub => drop(Book::open(&source)?),
+        Kind::Kindle => {
+            kindle::inspect(&source)?;
+        }
         Kind::Pdf => drop(pdf::Pdf::open(&source)?),
         Kind::Transcript => drop(TextBook::open(&source, format)?),
         Kind::Comic => drop(comic::Comic::open(&source)?),

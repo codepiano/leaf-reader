@@ -1,1 +1,4 @@
 *.pdf binary
+*.mobi binary
+*.azw3 binary
+src-tauri/vendor/libmobi/** whitespace=-blank-at-eol,-blank-at-eof
