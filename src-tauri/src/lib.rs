@@ -4,6 +4,7 @@ mod collection;
 mod comic;
 mod cover;
 mod details;
+mod metadata_lookup;
 mod epub;
 mod github;
 mod kindle;
@@ -1169,6 +1170,7 @@ pub fn run() {
             scan::scan_library,
             book_info::book_info,
             details::edit_book_details,
+            metadata_lookup::lookup_book_metadata,
             reading_time::save_reading_time,
             library_directory::library_settings,
             library_directory::set_library_settings,

@@ -97,3 +97,77 @@ test("logical books have independent details and failed edits or cancellation pr
     page.locator('[data-book-key="anthology::toc-0-1"] .source-link'),
   ).toContainText("三册随笔合集");
 });
+
+test("public catalog lookup previews multiple editions before saving a selected candidate", async ({ page }) => {
+  await mockDesktop(page, false, false, false, true);
+  await page.goto("/");
+  await page.evaluate(() => {
+    const mock = (window as any).__TAURI_INTERNALS__;
+    const original = mock.invoke;
+    mock.invoke = async (command: string, args: { term: string; author: string }) => {
+      if (command !== "lookup_book_metadata") return original(command, args);
+      ((window as any).catalogQueries ||= []).push(args);
+      if (args.term === "重试") throw new Error("Open Library 暂时无法查询");
+      if (args.term === "没有这本书") return [];
+      await new Promise<void>((resolve) => { (window as any).finishCatalogQuery = resolve; });
+      return [
+        { reference: "/books/OL1M", details: { title: "示例书名", author: "候选作者", publisher: "第一家出版社", published: "2003", isbn: "9780141439518", language: "eng" } },
+        { reference: "/books/OL2M", details: { title: "示例书名", author: "候选作者", publisher: "第二家出版社及其用于检查长文本换行的完整机构名", published: "2008", isbn: "9780141439525", language: "eng" } },
+      ];
+    };
+  });
+  await page.locator('[data-book-key="sample"] [data-action="info"]').click();
+  await edit(page);
+  await page.locator("#details-title").fill("示例书名");
+  await page.locator("#details-author").fill("手填作者");
+  await page.getByRole("button", { name: "查找公开书目" }).click();
+  const lookup = page.getByRole("dialog", { name: "从 Open Library 补全" });
+  const term = lookup.getByLabel("书名或 ISBN");
+  const author = lookup.getByLabel("作者（按书名查找时可选）");
+  const submit = lookup.getByRole("button", { name: "查找" });
+  await expect(term).toHaveValue("示例书名");
+  await expect(author).toHaveValue("手填作者");
+  await term.fill("重试");
+  await submit.click();
+  await expect(lookup.getByRole("status")).toContainText("暂时无法查询");
+  await term.fill("没有这本书");
+  await author.fill("");
+  await submit.click();
+  await expect(lookup.getByRole("status")).toContainText("未找到候选");
+  await term.fill("示例书名");
+  await author.fill("候选作者");
+  await author.press("Enter");
+  await expect(submit).toBeDisabled();
+  await page.screenshot({ path: "test-results/metadata-lookup-loading.png" });
+  await page.evaluate(() => (window as any).finishCatalogQuery());
+  await expect(lookup.getByRole("status")).toContainText("2 个候选");
+  await page.setViewportSize({ width: 800, height: 660 });
+  await lookup.getByRole("button", { name: /选用此书目.*OL2M/ }).focus();
+  await page.screenshot({ path: "test-results/metadata-lookup-narrow.png" });
+  await lookup.getByRole("button", { name: /选用此书目.*OL2M/ }).click();
+  await expect(lookup).toBeHidden();
+  await expect(page.locator("#details-author")).toHaveValue("手填作者");
+  await expect(page.locator("#details-isbn")).toHaveValue("9780141439525");
+  await expect(page.locator("#details-publisher")).toHaveValue(/第二家出版社/);
+  expect(await page.evaluate(() => (window as any).__mockCommands.some(
+    ({ command }: { command: string }) => command === "edit_book_details",
+  ))).toBe(false);
+  await page.getByRole("button", { name: "查找公开书目" }).click();
+  await expect(term).toHaveValue("9780141439525");
+  await expect(author).toHaveValue("");
+  await submit.click();
+  await expect(submit).toBeDisabled();
+  await page.evaluate(() => (window as any).finishCatalogQuery());
+  await expect(lookup.getByRole("status")).toContainText("2 个候选");
+  await lookup.getByLabel("替换已有字段").check();
+  await lookup.getByRole("button", { name: /选用此书目.*OL2M/ }).click();
+  await expect(page.locator("#details-author")).toHaveValue("候选作者");
+  await page.locator("#details-save").click();
+  await expect(page.locator("#book-info-content")).toContainText("第二家出版社");
+  expect(await page.evaluate(() => (window as any).catalogQueries)).toEqual([
+    { term: "重试", author: "手填作者" },
+    { term: "没有这本书", author: "" },
+    { term: "示例书名", author: "候选作者" },
+    { term: "9780141439525", author: "" },
+  ]);
+});

@@ -1,4 +1,5 @@
 import { showDialog } from "./focus";
+import { initMetadataLookup } from "./metadata-lookup";
 import { invoke } from "@tauri-apps/api/core";
 import {
   escapeHTML as esc,
@@ -44,8 +45,37 @@ export function initBookInfo(
   );
   document.body.insertAdjacentHTML(
     "beforeend",
-    `<dialog id="details-dialog" class="app-dialog"><form id="details-form"><div class="dialog-heading"><h2>编辑图书信息</h2><wa-button id="details-close" class="icon-button" size="s" aria-label="关闭信息编辑">×</wa-button></div><p class="field-hint">留空使用原书信息。仅保存在本机，不改写原文件；合集子书可单独补全。</p><label class="form-field">书名<input id="details-title" class="field-input" maxlength="256"></label><label class="form-field">作者<input id="details-author" class="field-input" maxlength="256"></label><div class="details-pair"><label class="form-field">出版社<input id="details-publisher" class="field-input" maxlength="256"></label><label class="form-field">出版日期<input id="details-published" class="field-input" maxlength="64" placeholder="例如：2026-11"></label><label class="form-field">ISBN<input id="details-isbn" class="field-input" maxlength="64"></label><label class="form-field">语言<input id="details-language" class="field-input" maxlength="64" placeholder="例如：zh-CN"></label></div><label class="form-field">简介<textarea id="details-description" class="field-input" rows="4" maxlength="10000"></textarea></label><p id="details-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="details-reset" class="quiet-button" size="s">恢复原书信息</wa-button><wa-button id="details-cancel" class="quiet-button" size="s">取消</wa-button><wa-button id="details-save" class="primary-button" size="s">保存</wa-button></div></form></dialog>`,
+    `<dialog id="details-dialog" class="app-dialog"><form id="details-form"><div class="dialog-heading"><h2>编辑图书信息</h2><wa-button id="details-close" class="icon-button" size="s" aria-label="关闭信息编辑">×</wa-button></div><p class="field-hint">留空使用原书信息。仅保存在本机，不改写原文件；合集子书可单独补全。</p><button type="button" id="details-lookup" class="quiet-button">查找公开书目</button><p id="details-lookup-status" class="field-hint" role="status"></p><label class="form-field">书名<input id="details-title" class="field-input" maxlength="256"></label><label class="form-field">作者<input id="details-author" class="field-input" maxlength="256"></label><div class="details-pair"><label class="form-field">出版社<input id="details-publisher" class="field-input" maxlength="256"></label><label class="form-field">出版日期<input id="details-published" class="field-input" maxlength="64" placeholder="例如：2026-11"></label><label class="form-field">ISBN<input id="details-isbn" class="field-input" maxlength="64"></label><label class="form-field">语言<input id="details-language" class="field-input" maxlength="64" placeholder="例如：zh-CN"></label></div><label class="form-field">简介<textarea id="details-description" class="field-input" rows="4" maxlength="10000"></textarea></label><p id="details-error" class="dialog-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="details-reset" class="quiet-button" size="s">恢复原书信息</wa-button><wa-button id="details-cancel" class="quiet-button" size="s">取消</wa-button><wa-button id="details-save" class="primary-button" size="s">保存</wa-button></div></form></dialog>`,
   );
+  const detailsField = (key: keyof Details) =>
+    document.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#details-${key}`)!;
+  const lookupStatus = $("#details-lookup-status");
+  const lookupButton = document.querySelector<HTMLButtonElement>("#details-lookup")!;
+  let saving = false;
+  const openLookup = initMetadataLookup((details, overwrite) => {
+    if (!current || saving) return 0;
+    let filled = 0;
+    for (const key of Object.keys(details) as (keyof Details)[]) {
+      const field = detailsField(key);
+      const value = details[key];
+      if (!value || (!overwrite && (field.value.trim() || current.info.original_details?.[key]?.trim()))) continue;
+      field.value = value;
+      filled++;
+    }
+    lookupStatus.textContent = filled ? `已填入 ${filled} 项，保存前可继续编辑。` : "";
+    return filled;
+  });
+  lookupButton.onclick = () => {
+    if (!current || saving) return;
+    const original = current.info.original_details;
+    openLookup({
+      ...emptyDetails(),
+      title: detailsField("title").value.trim() || original?.title || current.info.title,
+      author: detailsField("author").value.trim() || original?.author || "",
+      isbn: detailsField("isbn").value.trim() || original?.isbn || "",
+    });
+  };
+
   $("#book-info-edit").onclick = () => {
     if (!current) return;
     const { info } = current;
@@ -57,10 +87,10 @@ export function initBookInfo(
       field.placeholder = info.original_details?.[key] || "原书未提供";
     }
     $("#details-error").hidden = true;
+    lookupStatus.textContent = "";
     ($("#book-info-dialog") as HTMLDialogElement).close();
     showDialog($("#details-dialog") as HTMLDialogElement);
   };
-  let saving = false;
   const closeEditor = (event: Event) => {
     event.preventDefault();
     if (saving) return;
@@ -72,6 +102,7 @@ export function initBookInfo(
   $("#details-dialog").addEventListener("cancel", closeEditor);
   $("#details-reset").onclick = (event) => {
     event.preventDefault();
+    lookupStatus.textContent = "";
     for (const key of Object.keys(emptyDetails()))
       (document.querySelector(`#details-${key}`) as HTMLInputElement).value =
         "";
@@ -86,6 +117,7 @@ export function initBookInfo(
         document.querySelector(`#details-${key}`) as HTMLInputElement
       ).value.trim();
     saving = true;
+    lookupButton.disabled = true;
     $("#details-error").hidden = true;
     for (const id of [
       "details-save",
@@ -116,6 +148,7 @@ export function initBookInfo(
       $("#details-error").textContent = String(e);
     } finally {
       saving = false;
+      lookupButton.disabled = false;
       for (const id of [
         "details-save",
         "details-reset",

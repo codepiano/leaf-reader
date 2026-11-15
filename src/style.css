@@ -1983,3 +1983,41 @@ wa-button.danger-button::part(button) { background: #945348; border-color: #9453
   padding: 1rem;
   background: var(--surface);
 }
+
+#details-lookup {
+  margin-block-start: 10px;
+}
+#details-lookup-status:empty {
+  display: none;
+}
+#metadata-lookup-dialog .field-input {
+  inline-size: 100%;
+}
+#metadata-lookup-dialog .dialog-actions {
+  position: static;
+  margin-block: 0;
+  padding-block-end: 0;
+}
+#metadata-lookup-candidates {
+  margin-block-start: 12px;
+}
+#metadata-lookup-candidates ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+#metadata-lookup-candidates li {
+  padding: 12px 0;
+  border-block-start: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+#metadata-lookup-candidates dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin-block: 8px;
+  font-size: 12px;
+}
+#metadata-lookup-candidates dd {
+  margin: 0;
+}
