@@ -26,7 +26,7 @@
   const locateSearch = (target) => {
     if (!target) return null;
     // Use the same text boundaries as book-search.ts, retaining DOM offsets for the match.
-    const excluded = "script,style,title,template,iframe,object,embed,form,[hidden]";
+    const excluded = "script,style,title,template,iframe,object,embed,form,button,textarea,select,audio,video,.math-inline,.math-display,[hidden], [aria-hidden=true]";
     const separated = "article,aside,blockquote,br,dd,div,dt,footer,h1,h2,h3,h4,h5,h6,header,hr,li,main,nav,p,pre,section,td,th";
     let text = "";
     const nodes = [];

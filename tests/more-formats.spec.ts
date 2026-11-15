@@ -6,18 +6,19 @@ const title = "测试非常长的书名，用于检查书名省略和工具栏�
 const folder = "/qa/Poems";
 const html = "/qa/export.html";
 const comic = "/qa/Comic.cbz";
+const txt = "/qa/dialogue.txt";
 const bodies = [
   '<h1>秋</h1><p>第一行\n第二行</p><p>新一节</p><a href="2.md#春">去春天</a>',
   '<h1>春</h1><p>新一章</p><h2>诗题</h2><p>诗行</p><span class="math math-inline">x^2</span><pre><code class="language-javascript">const spring = 2;</code></pre><span class="task-mark" role="img" aria-label="已完成">☑</span>',
 ];
 
 async function install(page: Page) {
-  await page.addInitScript(({ prefix, metadata, folder, html, comic, title, bodies }) => {
+  await page.addInitScript(({ prefix, metadata, folder, html, comic, txt, title, bodies }) => {
     const collection = { enabled: false, parts: [] };
-    const paths = [folder, html, comic];
+    const paths = [folder, html, comic, txt];
     const library = {
       books: paths.map((path, index) => ({
-        id: String(index), title: index === 0 ? title : ["", "HTML 样本", "漫画样本"][index],
+        id: String(index), title: index === 0 ? title : ["", "HTML 样本", "漫画样本", "TXT 样本"][index],
         path, author: "", chapters: 2, opened: 0, collection, metadata,
         part_metadata: {}, progress: { chapter: 0, fraction: 0 },
       })),
@@ -49,7 +50,7 @@ async function install(page: Page) {
             case "open_book": {
               active = paths.indexOf(args.path);
               const record = library.books[active];
-              const chapters = active === 0 ? textChapters : active === 1 ? [{ title: "HTML 样本", path: "chapter-0.html" }] : [];
+              const chapters = active === 0 ? textChapters : active === 1 ? [{ title: "HTML 样本", path: "chapter-0.html" }] : active === 3 ? [{ title: "TXT 样本", path: "chapter-0.xhtml" }] : [];
               return {
                 ...record, token: "qa-token", chapters,
                 metadata: { ...metadata, poetry: localStorage.getItem(`poetry.${active}`) === "true" },
@@ -59,7 +60,7 @@ async function install(page: Page) {
                 track_reading_time: false,
               };
             }
-            case "get_chapter": return active === 0 ? bodies[args.index] :
+            case "get_chapter": return active === 0 ? bodies[args.index] : active === 3 ? "<p>访谈正文中的文字</p>" :
               '<h1>HTML 正文</h1><h2 id="section">标题二</h2><p>保留正文</p><img alt="本地图片" src="images/leaf.png">';
             case "set_poetry": localStorage.setItem(`poetry.${active}`, String(args.enabled)); return;
             case "save_progress":
@@ -77,7 +78,7 @@ async function install(page: Page) {
         metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
       },
     });
-  }, { prefix, metadata: emptyMeta(), folder, html, comic, title, bodies });
+  }, { prefix, metadata: emptyMeta(), folder, html, comic, txt, title, bodies });
   await page.route(`${prefix}qa-token/**`, (route) => route.fulfill({
     contentType: "image/svg+xml",
     body: '<svg xmlns="http://www.w3.org/2000/svg" width="700" height="980"><rect width="700" height="980" fill="ivory"/><rect x="100" y="100" width="500" height="780" fill="#526a4f"/></svg>',
@@ -190,4 +191,28 @@ test("shows HTML source as text and exports an independent rendered chapter", as
   const output = await page.evaluate(() => localStorage.getItem("html.export"));
   expect(output).toContain("HTML 正文");
   expect(output).not.toContain("<script");
+});
+
+
+test("TXT, Markdown directory chapters and HTML can all search rendered text", async ({ page }) => {
+  await install(page);
+  for (const [id, term] of [["0", "const spring"], ["1", "保留正文"], ["3", "访谈正文中的文字"]]) {
+    await page.locator(`[data-book-key="${id}"] .book-card`).click();
+    await expect(page.locator("#chapter-loading")).toBeHidden();
+    await page.getByRole("button", { name: "书内查找" }).click();
+    const dialog = page.getByRole("dialog", { name: "书内查找" });
+    await dialog.getByRole("searchbox").fill(term);
+    await dialog.getByRole("button", { name: "查找", exact: true }).click();
+    await expect(dialog.getByRole("status")).toHaveText("1 条结果");
+    const reader = page.frameLocator("#reader");
+    const previousLoad = await reader.locator("html").getAttribute("data-leaf-load");
+    await dialog.locator("#book-search-results button").click();
+    await expect(reader.locator("html")).not.toHaveAttribute("data-leaf-load", previousLoad!);
+    await expect.poll(() => reader.locator("body").evaluate((body) => {
+      const view = body.ownerDocument.defaultView!;
+      return view.CSS.highlights?.get("leaf-search")?.values().next().value?.toString()
+        ?? view.getSelection()?.toString();
+    })).toBe(term);
+    await page.locator("#back").click();
+  }
 });

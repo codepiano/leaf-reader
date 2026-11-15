@@ -670,7 +670,8 @@ async function presentBook(opened: Book) {
   }
   const isPagedBook = isPaged(opened);
   const isEpub = /\.epub$/i.test(opened.path);
-  $("#book-search").hidden = !isEpub;
+  $("#book-search").hidden = !(isEpub || isMarkdown(opened.path) || isHtml(opened.path) ||
+    /\.txt$/i.test(opened.path) || opened.chapters.some((section) => section.path.startsWith("sections/") && isMarkdown(section.path)));
   $("#continuous-mode").hidden = !isEpub;
   $("#reader").hidden = isPagedBook;
   $("#pdf-viewport").hidden = !isPagedBook;
