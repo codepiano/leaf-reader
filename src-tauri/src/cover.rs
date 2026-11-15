@@ -64,7 +64,7 @@ fn picture(
     Ok((bytes, mime))
 }
 pub fn extract(path: &Path) -> Result<(Vec<u8>, &'static str), String> {
-    if pdf::is_pdf(path) {
+    if Kind::from_path(path) != Ok(Kind::Epub) {
         return Err("此书使用文字封面".into());
     }
     let mut archive = ZipArchive::new(fs::File::open(path).map_err(|e| e.to_string())?)

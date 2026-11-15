@@ -866,6 +866,15 @@ p {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.reader-caption-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.reader-caption-actions wa-button {
+  white-space: nowrap;
+}
 .reader-caption button {
   padding: 0;
   flex-shrink: 0;

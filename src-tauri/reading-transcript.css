@@ -1,0 +1,14 @@
+.transcript-turn {
+  --speaker: #81847d;
+  border-inline-start: 3px solid var(--speaker);
+  margin-block: 1.25em;
+  padding-inline-start: 1em;
+}
+.transcript-turn small { opacity: 0.75; }
+.transcript-turn p { margin-block: 0.4em; }
+.transcript-turn.speaker-0 { --speaker: #6e9c73; }
+.transcript-turn.speaker-1 { --speaker: #778cc3; }
+.transcript-turn.speaker-2 { --speaker: #b68057; }
+.transcript-turn.speaker-3 { --speaker: #a47bb6; }
+.transcript-turn.speaker-4 { --speaker: #5b9f9e; }
+.transcript-turn.speaker-5 { --speaker: #b86d7c; }

@@ -9,10 +9,10 @@ import type WaSlider from "@awesome.me/webawesome/dist/components/slider/slider.
 import type WaSelect from "@awesome.me/webawesome/dist/components/select/select.js";
 import type WaButton from "@awesome.me/webawesome/dist/components/button/button.js";
 import "./style.css";
+import transcriptCSS from "../src-tauri/reading-transcript.css?inline";
 import {
   type Book,
   readingPercent,
-  isPdf,
   type Chapter,
   type Toc,
   escapeHTML,
@@ -60,6 +60,8 @@ function loadSettings(): Settings {
 let settings = loadSettings();
 let book: Book | null = null;
 let pdf: PdfReader | undefined;
+let browserReading = false;
+let browserRequestPending = false;
 let chapter = 0;
 let fraction = 0;
 let progressOffsets: number[] = [];
@@ -130,11 +132,11 @@ $("#app").innerHTML = `
       <div class="shelf-heading"><h2>我的书架 <span id="shelf-count">0 本</span></h2><span class="muted">最近阅读</span></div>
       <div id="shelf" class="shelf"></div>
       <div id="empty" class="empty-state"><div class="empty-art">${icon("book")}<span class="art-leaf">${icon("leaf")}</span></div><h2>下一段旅程，从这里开始</h2><p>打开一本书，把喜欢的文字放在手边。<br>也可以将文件拖到窗口中。</p><wa-button id="empty-open" class="primary-button" size="small">${icon("folder")}选择本地书籍</wa-button><wa-button id="demo" class="text-button" size="small">先读一段示例 ${icon("arrow")}</wa-button><div class="empty-foot">无需账号 · 无需联网 · 只专注阅读</div></div>
-      <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB 2 / 3 · PDF</span></footer>
+      <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB · PDF · Markdown · TXT</span></footer>
     </section>
     <div id="reader-workspace" hidden>
     <section id="reader-view" class="reader-view">
-      <div class="reader-caption"><span id="chapter-caption"></span><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div>
+      <div class="reader-caption"><span id="chapter-caption"></span><div class="reader-caption-actions"><wa-button id="browser-reading" class="quiet-button" size="s" hidden>浏览器共读</wa-button><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div></div>
       <div id="chapter-loading" class="chapter-loading" role="status" hidden></div>
       <div id="pdf-tools" hidden>
         <form id="pdf-jump">
@@ -343,6 +345,7 @@ function setBusy(value: boolean) {
   for (const id of ["open", "empty-open", "demo"])
     $<WaButton>(`#${id}`).disabled = value;
   document.body.classList.toggle("busy", value);
+  updateBrowserReading();
 }
 async function refreshShelf(invalidateCovers = false) {
   await shelf.refresh(invalidateCovers);
@@ -463,7 +466,35 @@ window.addEventListener("message", (e) => {
     }
   }
 });
+function updateBrowserReading() {
+  const control = $<WaButton>("#browser-reading");
+  control.hidden = !book || book.pdf_size !== undefined;
+  control.disabled = browserRequestPending || (!browserReading && (!readerReady || busy || loadingChapter));
+  control.textContent = browserReading ? "结束浏览器共读" : "浏览器共读";
+}
+$("#browser-reading").onclick = async () => {
+  if (!book || book.pdf_size !== undefined || browserRequestPending) return;
+  const current = book;
+  browserRequestPending = true;
+  updateBrowserReading();
+  try {
+    if (browserReading) {
+      await invoke("stop_browser_reading");
+      browserReading = false;
+    } else {
+      await invoke("open_browser_reading", { token: current.token, index: chapter });
+      if (book === current) browserReading = true;
+    }
+  } catch (e) {
+    showError(e);
+  } finally {
+    browserRequestPending = false;
+    updateBrowserReading();
+  }
+};
+
 function updatePosition() {
+  updateBrowserReading();
   if (!book) return;
   if (pdf) {
     const progress = readingPercent((chapter + 1) / pdf.pages);
@@ -518,6 +549,8 @@ async function presentBook(opened: Book) {
   clearReader();
   await closePdf();
   book = opened;
+  browserReading = false;
+  updateBrowserReading();
   $("#book-info").hidden = false;
   chapter = opened.progress.chapter;
   fraction = opened.progress.fraction;
@@ -526,7 +559,7 @@ async function presentBook(opened: Book) {
   book.candidates ??= [];
   book.part_id ??= null;
   book.source_title ??= book.title;
-  $("#collection-mode").hidden = opened.pdf_size !== undefined;
+  $("#collection-mode").hidden = !/\.epub$/i.test(opened.path);
   $("#collection-mode").textContent = book.collection.enabled
     ? "合集设置"
     : "合集模式";
@@ -575,7 +608,7 @@ async function pickBook() {
     const path = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: "电子书", extensions: ["epub", "pdf"] }],
+      filters: [{ name: "电子书", extensions: ["epub", "pdf", "md", "markdown", "txt"] }],
     });
     if (typeof path === "string") await openPath(path, false, undefined, true);
   } catch (e) {
@@ -588,7 +621,7 @@ function readerCSS() {
     white: ["#fff", "#303630", "#627c55"],
     night: ["#222723", "#cbd2c7", "#a6bc95"],
   }[settings.theme];
-  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}::selection{background:#b9c7a8;color:#1f3020}`;
+  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}::selection{background:#b9c7a8;color:#1f3020}${transcriptCSS}`;
 }
 function buildChapter(source: string, path: string, loadId: string) {
   // Keep publisher styles, but never grant book markup scripts, forms, IPC or networking.
@@ -848,6 +881,8 @@ async function returnToShelf(filter: Filter) {
   clearReader();
   await closePdf();
   book = null;
+  browserReading = false;
+  updateBrowserReading();
   $("#book-info").hidden = true;
   $<HTMLIFrameElement>("#reader").srcdoc = "";
   setReadingView(false);
@@ -1018,10 +1053,10 @@ if (isTauri()) {
       e.payload.type !== "over" && e.payload.type !== "enter";
     if (e.payload.type === "drop") {
       const path = e.payload.paths.find((p) =>
-        isPdf(p) || /\.epub$/i.test(p),
+        /\.(epub|pdf|md|markdown|txt)$/i.test(p),
       );
       if (path) void openPath(path, false, undefined, true);
-      else showError("请拖入 EPUB 或 PDF 文件。");
+      else showError("请拖入 EPUB、PDF、Markdown 或 TXT 文件。");
     }
   });
   let closing = false;

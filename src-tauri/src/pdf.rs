@@ -1,19 +1,6 @@
 use super::*;
 use std::io::{Read, Seek, SeekFrom};
 
-pub fn is_pdf(path: &Path) -> bool {
-    has_extension(path, "pdf")
-}
-
-pub fn is_supported(path: &Path) -> bool {
-    is_pdf(path) || has_extension(path, "epub")
-}
-
-fn has_extension(path: &Path, extension: &str) -> bool {
-    path.extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case(extension))
-}
-
 pub fn title(path: &Path) -> String {
     path.file_stem()
         .unwrap_or_default()
@@ -76,7 +63,7 @@ pub async fn read_pdf_range(
             .filter(|s| s.token == token)
             .and_then(|s| match &mut s.book {
                 SessionBook::Pdf(pdf) => Some(pdf),
-                SessionBook::Epub(_) => None,
+                _ => None,
             })
             .ok_or("PDF 已关闭")?;
         pdf.read(start, end).map(tauri::ipc::Response::new)

@@ -166,9 +166,12 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
                 }
                 continue;
             }
-            if !kind.is_file() || !pdf::is_supported(&path) {
+            if !kind.is_file() {
                 continue;
             }
+            let Ok(format) = Kind::from_path(&path) else {
+                continue;
+            };
             if !seen_files.insert(path.clone()) {
                 continue;
             }
@@ -188,10 +191,13 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
                     continue;
                 }
             }
-            let metadata = if pdf::is_pdf(&path) {
-                pdf::Pdf::open(&path).map(|_| (pdf::title(&path), String::new(), 0))
-            } else {
-                Book::open(&path).map(|book| (book.title, book.author, book.chapters.len()))
+            let metadata = match format {
+                Kind::Epub => {
+                    Book::open(&path).map(|book| (book.title, book.author, book.chapters.len()))
+                }
+                Kind::Pdf => pdf::Pdf::open(&path).map(|_| (pdf::title(&path), String::new(), 0)),
+                Kind::Markdown | Kind::Transcript => TextBook::open(&path, format)
+                    .map(|book| (book.title, String::new(), book.chapters.len())),
             };
             match metadata {
                 Ok((title, author, chapters)) => {
@@ -361,7 +367,7 @@ mod tests {
         fs::write(sub.join("b.epub"), bytes).unwrap();
         fs::write(two.join("c.epub"), bytes).unwrap();
         fs::write(two.join("bad.epub"), b"bad").unwrap();
-        fs::write(two.join("ignored.txt"), b"text").unwrap();
+        fs::write(two.join("ignored.bin"), b"text").unwrap();
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink(&one, sub.join("loop")).unwrap();
