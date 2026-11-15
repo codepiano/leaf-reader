@@ -100,6 +100,7 @@ const icon = (name: string, cls = "") => {
     right: '<path d="m10 6 6 6-6 6"/>',
     arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
     close: '<path d="m6 6 12 12M18 6 6 18"/>',
+    sidebar: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14"/>',
     pin: '<path d="m15 4 5 5-3 1-3 4v3l-7-7h3l4-3 1-3ZM10.5 13.5 5 19"/>',
     folder: '<path d="M3 7V5h6l2 2h10v13H3Zm0 4h18"/>',
   };
@@ -117,14 +118,14 @@ const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 
 $("#app").innerHTML = `
-  <aside class="sidebar">
+  <aside id="library-sidebar" class="sidebar" aria-label="书架侧栏">
     <a class="brand" href="#" aria-label="Leaf 书架">${icon("leaf")}<span>Leaf<span class="brand-dot">.</span></span></a>
     <div class="sidebar-caption">你的私人阅读空间</div>
     <nav><button id="library-nav" class="nav-item active">${icon("grid")}<span>我的书架</span><span id="book-count" class="count">0</span></button></nav>
     <div class="sidebar-bottom"><div class="local-badge"><span></span>本地存储 · 离线可用</div><p>给阅读，留一点空间。</p><span class="version">LEAF READER / 0.1</span></div>
   </aside>
   <main>
-    <header class="topbar"><div id="breadcrumb">书架 <span>/</span> 全部书籍</div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><button type="button" id="toc-toggle" class="quiet-button" aria-label="本书目录" title="本书目录" aria-expanded="false" aria-controls="toc-panel" hidden>${icon("list")}<span>目录</span></button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开书籍</wa-button></div></header>
+    <header class="topbar"><div class="topbar-start"><button type="button" id="library-sidebar-toggle" class="quiet-button" aria-label="书架侧栏" aria-expanded="true" aria-controls="library-sidebar" title="收起书架侧栏">${icon("sidebar")}</button><div id="breadcrumb">书架 <span>/</span> 全部书籍</div></div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><button type="button" id="toc-toggle" class="quiet-button" aria-label="本书目录" title="本书目录" aria-expanded="false" aria-controls="toc-panel" hidden>${icon("list")}<span>目录</span></button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开书籍</wa-button></div></header>
     <section id="library-view" class="library-view">
       <div class="shelf-heading"><h2>我的书架 <span id="shelf-count">0 本</span></h2><span class="muted">最近阅读</span></div>
       <div id="shelf" class="shelf"></div>
@@ -169,6 +170,29 @@ document.body.insertAdjacentHTML(
   "beforeend",
   `<dialog id="collection-dialog" class="app-dialog collection-dialog"><div class="dialog-heading"><div><div class="eyebrow">合集模式</div><h2>选择要作为子书的目录</h2></div><wa-button id="collection-close" class="icon-button" aria-label="关闭合集设置" size="s">×</wa-button></div><p class="dialog-description">逻辑拆分，共用原 EPUB；每本子书单独记录进度。不会生成或改写 EPUB 文件。</p><p class="field-hint">默认只展示第一层，点击箭头逐级展开。勾选子书的起始分组；未链接的标题将使用其第一段正文作为起点。首个起点之前的内容保留在合集“附加内容”中，不计为子书。</p><div id="collection-candidates"></div><p id="collection-selection" class="field-hint"></p><p id="collection-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="collection-disable" class="quiet-button" size="s" hidden>恢复整本阅读</wa-button><wa-button id="collection-apply" class="primary-button" size="s">转为合集模式</wa-button></div></dialog>`,
 );
+const librarySidebar = $("#library-sidebar");
+const librarySidebarToggle = $<HTMLButtonElement>("#library-sidebar-toggle");
+const librarySidebarPreference = "leaf.library-sidebar-collapsed";
+function setLibrarySidebarCollapsed(collapsed: boolean) {
+  $("#app").classList.toggle("library-sidebar-collapsed", collapsed);
+  librarySidebar.hidden = collapsed;
+  librarySidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+  librarySidebarToggle.title = collapsed ? "展开书架侧栏" : "收起书架侧栏";
+}
+try {
+  setLibrarySidebarCollapsed(localStorage.getItem(librarySidebarPreference) === "true");
+} catch {
+  // Keep the sidebar expanded if preferences are unavailable.
+}
+librarySidebarToggle.onclick = () => {
+  const collapsed = !librarySidebar.hidden;
+  setLibrarySidebarCollapsed(collapsed);
+  try {
+    localStorage.setItem(librarySidebarPreference, String(collapsed));
+  } catch {
+    // The sidebar can still be toggled in this window.
+  }
+};
 const shelf = new Shelf(
   (path, partId) => void openPath(path, false, partId, true),
   (filter) => void libraryView(filter),
