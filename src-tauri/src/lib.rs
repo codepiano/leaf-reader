@@ -1,6 +1,7 @@
 mod book_info;
 mod browser_reading;
 mod collection;
+mod comic;
 mod cover;
 mod details;
 mod epub;
@@ -52,6 +53,7 @@ struct BookMeta {
     pinned: bool,
     reading_status: Option<ReadingStatus>,
     details: details::Details,
+    poetry: bool,
 }
 fn source_available() -> bool {
     true
@@ -84,6 +86,7 @@ struct Library {
 enum SessionBook {
     Epub(Box<Book>),
     Pdf(pdf::Pdf),
+    Comic(comic::Comic),
     Text(TextBook),
 }
 
@@ -113,6 +116,8 @@ struct ReaderState {
 struct Opened {
     #[serde(skip_serializing_if = "Option::is_none")]
     pdf_size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    comic_pages: Option<usize>,
     track_reading_time: bool,
     token: String,
     id: String,
@@ -267,6 +272,7 @@ fn make_opened(
             book.weights.clone(),
             None,
         ),
+        SessionBook::Comic(_) => (Vec::new(), Vec::new(), Vec::new(), Vec::new(), None),
         SessionBook::Pdf(pdf) => (
             Vec::new(),
             Vec::new(),
@@ -280,6 +286,13 @@ fn make_opened(
         .unwrap_or_else(|| recent.progress.clone());
     if !library.settings.remember_position {
         progress = Progress::default();
+    }
+    let comic_pages = match &session.book {
+        SessionBook::Comic(comic) => Some(comic.len()),
+        _ => None,
+    };
+    if let Some(pages) = comic_pages {
+        progress.chapter = progress.chapter.min(pages - 1);
     }
     if !chapters.is_empty() {
         progress.chapter = progress.chapter.min(chapters.len() - 1);
@@ -314,6 +327,7 @@ fn make_opened(
     }
     Ok(Opened {
         pdf_size,
+        comic_pages,
         track_reading_time: library.settings.track_reading_time,
         token: session.token.clone(),
         id: session.id.clone(),
@@ -352,7 +366,8 @@ fn open_scoped_from(
     let book = match kind {
         Kind::Epub => SessionBook::Epub(Box::new(Book::open(&canonical)?)),
         Kind::Pdf => SessionBook::Pdf(pdf::Pdf::open(&canonical)?),
-        Kind::Markdown | Kind::Transcript => SessionBook::Text(TextBook::open(&canonical, kind)?),
+        Kind::Comic => SessionBook::Comic(comic::Comic::open(&canonical)?),
+        _ => SessionBook::Text(TextBook::open(&canonical, kind)?),
     };
     let path = canonical.to_string_lossy().to_string();
     let mut hash = DefaultHasher::new();
@@ -451,6 +466,7 @@ fn open_scoped_from(
     let (title, author, chapters) = match &book {
         SessionBook::Epub(book) => (book.title.clone(), book.author.clone(), book.chapters.len()),
         SessionBook::Text(book) => (book.title.clone(), String::new(), book.chapters.len()),
+        SessionBook::Comic(comic) => (pdf::title(&canonical), String::new(), comic.len()),
         SessionBook::Pdf(_) => (
             pdf::title(&canonical),
             String::new(),
@@ -614,7 +630,7 @@ fn read_chapter(session: &mut Session, index: usize) -> Result<String, String> {
             8 * 1024 * 1024,
         )?)
         .map_err(|_| "章节不是 UTF-8 编码".into()),
-        SessionBook::Pdf(_) => Err("PDF 按页阅读".into()),
+        SessionBook::Pdf(_) | SessionBook::Comic(_) => Err("此书按页阅读".into()),
     }
 }
 
@@ -645,6 +661,7 @@ fn write_progress(
         .ok_or("书籍已关闭")?;
     let total = match &s.book {
         SessionBook::Pdf(pdf) => pdf.pages,
+        SessionBook::Comic(comic) => comic.len(),
         _ => s.view_chapters.len(),
     };
     if chapter >= total || !fraction.is_finite() {
@@ -661,7 +678,9 @@ fn write_progress(
         chapter,
         fraction,
         book_fraction: match &s.book {
-            SessionBook::Pdf(_) => Some((chapter + 1) as f64 / total as f64),
+            SessionBook::Pdf(_) | SessionBook::Comic(_) => {
+                Some((chapter + 1) as f64 / total as f64)
+            }
             _ => weights.get(chapter).map(|weight| {
                 let before = weights[..chapter].iter().sum::<u64>() as f64;
                 (before + *weight as f64 * fraction) / weights.iter().sum::<u64>() as f64
@@ -691,6 +710,32 @@ fn save_progress(
 ) -> Result<(), String> {
     write_progress(&state, &token, chapter, fraction)
 }
+#[tauri::command]
+fn set_poetry(
+    state: tauri::State<ReaderState>,
+    token: String,
+    enabled: bool,
+) -> Result<(), String> {
+    write_poetry(&state, &token, enabled)
+}
+
+fn write_poetry(state: &ReaderState, token: &str, enabled: bool) -> Result<(), String> {
+    let active = state.session.lock().map_err(|e| e.to_string())?;
+    let session = active
+        .as_ref()
+        .filter(|s| s.token == token)
+        .ok_or("书籍已关闭")?;
+    let mut library = state.library.lock().map_err(|e| e.to_string())?;
+    let mut next = library.clone();
+    next.metadata
+        .entry(item_key(&session.id, session.part_id.as_deref()))
+        .or_default()
+        .poetry = enabled;
+    persist(state, &next)?;
+    *library = next;
+    Ok(())
+}
+
 fn valid_name(value: &str) -> Result<String, String> {
     let value = value.trim();
     if value.is_empty() || value.chars().count() > 64 || value.chars().any(char::is_control) {
@@ -910,8 +955,10 @@ fn resource(app: &tauri::AppHandle, url: &str) -> Result<(Vec<u8>, &'static str)
         .as_mut()
         .filter(|s| s.token == token)
         .ok_or("书籍已关闭")?;
-    if let SessionBook::Text(book) = &session.book {
-        return book.read_image(path);
+    match &mut session.book {
+        SessionBook::Text(book) => return book.read_image(path),
+        SessionBook::Comic(book) => return book.read(path),
+        _ => {}
     }
     let mime = match path
         .rsplit('.')
@@ -1004,6 +1051,7 @@ pub fn run() {
             list_recent,
             get_chapter,
             save_progress,
+            set_poetry,
             close_book,
             frontend_ready,
             library_snapshot,
@@ -1092,6 +1140,114 @@ mod library_tests {
             dir,
         )
     }
+    #[test]
+    fn directory_books_scan_as_one_and_keep_poetry_and_chapter_on_reopen() {
+        let (state, dir) = state();
+        let folder = dir.join("Poems");
+        fs::create_dir_all(folder.join("verses")).unwrap();
+        fs::write(
+            folder.join("SUMMARY.md"),
+            "- [Autumn](verses/10.md)\n- [Spring](2.md)",
+        )
+        .unwrap();
+        fs::write(folder.join("2.md"), "# Spring\n\nfirst line\nsecond line").unwrap();
+        fs::write(
+            folder.join("verses/10.md"),
+            "# Autumn\n\n![Leaf](../leaf.png)\n\n[Spring](../2.md#spring)",
+        )
+        .unwrap();
+        fs::write(folder.join("leaf.png"), b"local picture").unwrap();
+        let outside = dir.join("outside.png");
+        fs::write(&outside, b"not in the book").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, folder.join("outside.png")).unwrap();
+
+        scan::configure(
+            &state,
+            vec![
+                folder.join("verses").to_str().unwrap().into(),
+                dir.to_str().unwrap().into(),
+            ],
+        )
+        .unwrap();
+        scan::scan(&state).unwrap();
+        let library = state.library.lock().unwrap();
+        assert_eq!(library.recent.len(), 1);
+        assert_eq!(library.recent[0].chapters, 2);
+        drop(library);
+
+        let book = open_path(&state, &folder).unwrap();
+        assert_eq!(book.chapters[0].title, "Autumn");
+        assert_eq!(book.chapters[1].title, "Spring");
+        {
+            let mut active = state.session.lock().unwrap();
+            let session = active.as_mut().unwrap();
+            let body = read_chapter(session, 0).unwrap();
+            assert!(body.contains("../../images/leaf%2Epng"));
+            assert!(body.contains("../2.md#spring"));
+            let SessionBook::Text(text) = &session.book else {
+                panic!("expected a text book")
+            };
+            assert_eq!(
+                text.read_image("images/leaf.png").unwrap().0,
+                b"local picture"
+            );
+            assert!(text.read_image("images/outside.png").is_err());
+        }
+        write_progress(&state, &book.token, 1, 0.42).unwrap();
+        write_poetry(&state, &book.token, true).unwrap();
+        let other = open_path(&state, &folder.join("2.md")).unwrap();
+        assert!(!other.metadata.poetry);
+        assert!(write_poetry(&state, &book.token, false).is_err());
+        let reopened = open_path(&state, &folder).unwrap();
+        assert_eq!(reopened.progress.chapter, 1);
+        assert_eq!(reopened.progress.fraction, 0.42);
+        assert!(reopened.metadata.poetry);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn comic_reads_sorted_pages_lazily_and_resumes_after_reopen() {
+        use std::io::Write;
+        let (state, dir) = state();
+        let path = dir.join("Comic.cbz");
+        let mut zip = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+        for (name, contents) in [
+            ("pages/10.png", "ten"),
+            ("__MACOSX/3.png", "metadata"),
+            ("pages/2.jpg", "two"),
+        ] {
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(contents.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+        scan::configure(&state, vec![dir.to_str().unwrap().into()]).unwrap();
+        scan::scan(&state).unwrap();
+        assert_eq!(state.library.lock().unwrap().recent[0].chapters, 2);
+        let book = open_path(&state, &path).unwrap();
+        assert_eq!(book.comic_pages, Some(2));
+        let mut active = state.session.lock().unwrap();
+        let SessionBook::Comic(comic) = &mut active.as_mut().unwrap().book else {
+            panic!("expected a comic")
+        };
+        assert_eq!(
+            comic.read("comic/0").unwrap(),
+            (b"two".to_vec(), "image/jpeg")
+        );
+        assert_eq!(
+            comic.read("comic/1").unwrap(),
+            (b"ten".to_vec(), "image/png")
+        );
+        assert!(comic.read("comic/2").is_err());
+        drop(active);
+        write_progress(&state, &book.token, 1, 1.0).unwrap();
+        let reopened = open_path(&state, &path).unwrap();
+        assert_eq!(reopened.progress.chapter, 1);
+        assert_eq!(reopened.progress.book_fraction, Some(1.0));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn logical_books_keep_independent_progress_metadata_and_reversible_mode() {
         let (state, dir) = state();

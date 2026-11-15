@@ -1,6 +1,6 @@
 use super::*;
 use pulldown_cmark::{html, Event, Options, Parser, Tag, TagEnd};
-use std::io::Read;
+use std::{borrow::Cow, io::Read};
 
 const TEXT_LIMIT: u64 = 16 * 1024 * 1024;
 const OPTIONS: Options = Options::ENABLE_TABLES
@@ -12,11 +12,17 @@ pub enum Kind {
     Epub,
     Pdf,
     Markdown,
+    MarkdownDirectory,
+    Html,
+    Comic,
     Transcript,
 }
 
 impl Kind {
     pub fn from_path(path: &Path) -> Result<Self, String> {
+        if path.is_dir() {
+            return Ok(Self::MarkdownDirectory);
+        }
         let extension = path
             .extension()
             .and_then(|part| part.to_str())
@@ -24,9 +30,11 @@ impl Kind {
         match extension.to_ascii_lowercase().as_str() {
             "epub" => Ok(Self::Epub),
             "pdf" => Ok(Self::Pdf),
+            "cbz" => Ok(Self::Comic),
+            "htm" | "html" => Ok(Self::Html),
             "md" | "markdown" => Ok(Self::Markdown),
             "txt" => Ok(Self::Transcript),
-            _ => Err("请选择 EPUB、PDF、Markdown 或 TXT 文件".into()),
+            _ => Err("请选择支持的电子书文件或 Markdown 目录".into()),
         }
     }
 }
@@ -91,6 +99,9 @@ fn read_limited(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
 
 impl TextBook {
     pub fn open(path: &Path, kind: Kind) -> Result<Self, String> {
+        if kind == Kind::MarkdownDirectory {
+            return Self::directory(path);
+        }
         let bytes = read_limited(path, TEXT_LIMIT)?;
         let source = std::str::from_utf8(&bytes).map_err(|_| "请选择 UTF-8 文本文件")?;
         let source = source.trim_start_matches('\u{feff}');
@@ -103,14 +114,53 @@ impl TextBook {
             chapters: Vec::new(),
             toc: Vec::new(),
             weights: Vec::new(),
-            root: path.parent().ok_or("文件目录不可用")?.to_path_buf(),
+            root: path
+                .parent()
+                .ok_or("文件目录不可用")?
+                .canonicalize()
+                .map_err(|e| e.to_string())?,
             bodies: Vec::new(),
             images: HashSet::new(),
         };
         match kind {
             Kind::Markdown => book.markdown(source)?,
+            Kind::Html => {
+                let images = std::sync::Arc::new(Mutex::new(HashSet::new()));
+                let referenced = images.clone();
+                let source = ammonia::Builder::default()
+                    .add_generic_attributes(&["id"])
+                    .add_tags(&["figure", "figcaption"])
+                    .add_clean_content_tags(&[
+                        "title", "iframe", "object", "template", "form", "svg",
+                    ])
+                    .url_relative(ammonia::UrlRelative::PassThrough)
+                    .attribute_filter(move |element, attr, value| match (element, attr) {
+                        ("img", "src") => {
+                            let path = epub::resolve("chapter.html", value).ok()?;
+                            image_mime(&path)?;
+                            let url = format!("images/{}", encode_path(&path));
+                            referenced.lock().ok()?.insert(path);
+                            Some(Cow::Owned(url))
+                        }
+                        ("a", "href") if value.starts_with('#') => Some(Cow::Borrowed(value)),
+                        (_, "src" | "href") => None,
+                        _ => Some(Cow::Borrowed(value)),
+                    })
+                    .clean(source)
+                    .to_string();
+                book.images = std::mem::take(&mut *images.lock().map_err(|e| e.to_string())?);
+                if source.trim().is_empty() {
+                    return Err("HTML 文件没有可阅读的正文".into());
+                }
+                let weight = count(&source);
+                book.push(book.title.clone(), source, weight);
+            }
             Kind::Transcript => {
-                let body = transcript(source);
+                let body = if source.lines().any(|line| speaker(line.trim()).is_some()) {
+                    transcript(source)
+                } else {
+                    plain_text(source)
+                };
                 book.push(book.title.clone(), body, count(source));
             }
             _ => return Err("文件不是文本书籍".into()),
@@ -143,8 +193,12 @@ impl TextBook {
     }
 
     fn push(&mut self, title: String, body: String, weight: u64) {
+        let path = format!("chapter-{}.html", self.chapters.len());
+        self.push_at(title, path, body, weight);
+    }
+
+    fn push_at(&mut self, title: String, path: String, body: String, weight: u64) {
         let index = self.chapters.len();
-        let path = format!("chapter-{index}.html");
         self.chapters.push(Chapter {
             title: title.clone(),
             path: path.clone(),
@@ -160,6 +214,153 @@ impl TextBook {
         });
         self.weights.push(weight.max(1));
         self.bodies.push(body);
+    }
+
+    fn image_url(&mut self, source: &str, chapter: &str, dest: &str) -> Option<String> {
+        let path = epub::resolve(source, dest).ok()?;
+        image_mime(&path)?;
+        let up = "../".repeat(chapter.bytes().filter(|&b| b == b'/').count());
+        let url = format!("{up}images/{}", encode_path(&path));
+        self.images.insert(path);
+        Some(url)
+    }
+
+    fn directory(root: &Path) -> Result<Self, String> {
+        let root = root.canonicalize().map_err(|e| e.to_string())?;
+        let mut book = Self {
+            title: root
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Markdown 目录")
+                .to_string(),
+            root: root.clone(),
+            chapters: Vec::new(),
+            toc: Vec::new(),
+            weights: Vec::new(),
+            bodies: Vec::new(),
+            images: HashSet::new(),
+        };
+        let mut files = Vec::new();
+        let mut pending = vec![root.clone()];
+        let mut visited = 0;
+        while let Some(folder) = pending.pop() {
+            for entry in fs::read_dir(folder).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                visited += 1;
+                if visited > 20_000 || files.len() >= 4096 {
+                    return Err("Markdown 目录里的文件过多".into());
+                }
+                if entry.file_name().to_string_lossy().starts_with('.') {
+                    continue;
+                }
+                let kind = entry.file_type().map_err(|e| e.to_string())?;
+                let path = entry.path();
+                if kind.is_dir() && entry.file_name() != "node_modules" {
+                    pending.push(path);
+                } else if kind.is_file() && markdown_path(&path) {
+                    let relative = path
+                        .strip_prefix(&root)
+                        .ok()
+                        .and_then(Path::to_str)
+                        .ok_or("Markdown 章节路径应为 UTF-8")?
+                        .to_string();
+                    if !relative.contains([':', '\\']) {
+                        files.push(relative);
+                    }
+                }
+            }
+        }
+        files.sort_by(|a, b| comic::natural(a, b));
+        let markers = ["SUMMARY.md", "TOC.md", "_sidebar.md"];
+        let is_marker = |file: &str| {
+            markers
+                .iter()
+                .any(|marker| file.eq_ignore_ascii_case(marker))
+        };
+        let mut ordered = Vec::new();
+        let mut listed = HashSet::new();
+        let available = files
+            .iter()
+            .filter(|file| !is_marker(file))
+            .cloned()
+            .collect::<HashSet<_>>();
+        if let Some(index) = markers
+            .iter()
+            .find_map(|marker| files.iter().find(|f| f.eq_ignore_ascii_case(marker)))
+        {
+            let bytes = read_limited(&root.join(index), TEXT_LIMIT)?;
+            let source = std::str::from_utf8(&bytes).map_err(|_| "目录索引应为 UTF-8")?;
+            for event in Parser::new_ext(source, OPTIONS) {
+                if let Event::Start(Tag::Link { dest_url, .. }) = event {
+                    if let Ok(path) = epub::resolve(index, &dest_url) {
+                        if available.contains(&path) && listed.insert(path.clone()) {
+                            ordered.push(path);
+                        }
+                    }
+                }
+            }
+        }
+        ordered.extend(
+            files
+                .into_iter()
+                .filter(|f| !is_marker(f) && !listed.contains(f)),
+        );
+        let mut remaining = 32 * 1024 * 1024;
+        for relative in ordered {
+            let path = root
+                .join(&relative)
+                .canonicalize()
+                .map_err(|e| e.to_string())?;
+            if !path.starts_with(&root) {
+                return Err("Markdown 章节超出书籍目录".into());
+            }
+            let bytes = read_limited(&path, TEXT_LIMIT.min(remaining))?;
+            remaining -= bytes.len() as u64;
+            let source = std::str::from_utf8(&bytes)
+                .map_err(|_| format!("章节应为 UTF-8：{relative}"))?
+                .trim_start_matches('\u{feff}');
+            if source.trim().is_empty() {
+                continue;
+            }
+            let chapter = format!("sections/{relative}");
+            let title = markdown_headings(source, false)
+                .into_iter()
+                .next()
+                .map(|(_, title)| title)
+                .unwrap_or_else(|| pdf::title(&path));
+            let mut body = String::new();
+            html::push_html(
+                &mut body,
+                Parser::new_ext(source, OPTIONS)
+                    .map(|event| book.markdown_event(event, &relative, &chapter)),
+            );
+            book.push_at(title, chapter, body, count(source));
+        }
+        if book.chapters.is_empty() {
+            return Err("目录中没有可阅读的 Markdown 文件".into());
+        }
+        Ok(book)
+    }
+
+    fn markdown_event<'a>(&mut self, event: Event<'a>, source: &str, chapter: &str) -> Event<'a> {
+        match event {
+            Event::Html(s) | Event::InlineHtml(s) => Event::Text(s),
+            Event::Start(Tag::Image {
+                link_type,
+                dest_url,
+                title,
+                id,
+            }) => Event::Start(Tag::Image {
+                link_type,
+                title,
+                id,
+                dest_url: self
+                    .image_url(source, chapter, &dest_url)
+                    .unwrap_or_default()
+                    .into(),
+            }),
+            event => event,
+        }
     }
 
     fn markdown(&mut self, source: &str) -> Result<(), String> {
@@ -196,31 +397,7 @@ impl TextBook {
                         return None;
                     }
                     let (event, _) = events.next()?;
-                    Some(match event {
-                        Event::Html(s) | Event::InlineHtml(s) => Event::Text(s),
-                        Event::Start(Tag::Image {
-                            link_type,
-                            dest_url,
-                            title,
-                            id,
-                        }) => {
-                            let resolved = epub::resolve("chapter.html", &dest_url)
-                                .ok()
-                                .filter(|path| image_mime(path).is_some());
-                            let dest = resolved.map(|path| {
-                                let url = format!("images/{}", encode_path(&path));
-                                self.images.insert(path);
-                                url
-                            });
-                            Event::Start(Tag::Image {
-                                link_type,
-                                dest_url: dest.unwrap_or_default().into(),
-                                title,
-                                id,
-                            })
-                        }
-                        event => event,
-                    })
+                    Some(self.markdown_event(event, "chapter.html", "chapter.html"))
                 }),
             );
             self.push(title, body, count(&source[offset..end]));
@@ -229,11 +406,45 @@ impl TextBook {
     }
 }
 
+fn markdown_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"))
+}
+
+pub fn has_directory_index(path: &Path) -> bool {
+    ["SUMMARY.md", "TOC.md", "_sidebar.md"]
+        .iter()
+        .any(|name| fs::symlink_metadata(path.join(name)).is_ok_and(|m| m.is_file()))
+}
+
+fn plain_text(source: &str) -> String {
+    let mut body = String::new();
+    let mut stanza = Vec::new();
+    for line in source.lines().chain([""]) {
+        if line.trim().is_empty() {
+            if !stanza.is_empty() {
+                body.push_str(r#"<p class="plain-text">"#);
+                body.push_str(&escape(&stanza.join("\n")));
+                body.push_str("</p>");
+                stanza.clear();
+            }
+        } else {
+            stanza.push(line);
+        }
+    }
+    body
+}
+
 fn count(text: &str) -> u64 {
     text.chars().filter(|c| !c.is_whitespace()).count() as u64
 }
 
 fn markdown_chapters(source: &str) -> Vec<(usize, String)> {
+    markdown_headings(source, true)
+}
+
+fn markdown_headings(source: &str, numbered_only: bool) -> Vec<(usize, String)> {
     let mut chapters = Vec::new();
     let mut depth = 0;
     let mut heading = None;
@@ -254,13 +465,16 @@ fn markdown_chapters(source: &str) -> Vec<(usize, String)> {
                             .strip_prefix('第')
                             .and_then(|s| s.split_once('章'))
                             .map(|(n, _)| n.trim());
-                        if chapter_number.is_some_and(|n| {
-                            !n.is_empty()
-                                && n.chars().all(|c| {
-                                    c.is_ascii_digit()
-                                        || "一二三四五六七八九十百千万零〇两".contains(c)
-                                })
-                        }) {
+                        if !title.is_empty()
+                            && (!numbered_only
+                                || chapter_number.is_some_and(|n| {
+                                    !n.is_empty()
+                                        && n.chars().all(|c| {
+                                            c.is_ascii_digit()
+                                                || "一二三四五六七八九十百千万零〇两".contains(c)
+                                        })
+                                }))
+                        {
                             chapters.push((offset, title.to_string()));
                         }
                     }
@@ -351,6 +565,34 @@ fn transcript(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn html_keeps_local_images_and_page_anchors_without_active_content() {
+        let dir = std::env::temp_dir().join(format!("leaf-html-{}", token()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("read.html");
+        fs::write(dir.join("图.png"), b"local picture").unwrap();
+        fs::write(&file, r##"<!doctype html><html><head><title>书名</title><style>p { color:red }</style></head><body><h1 id="hello">正文</h1><a href="#hello">返回</a><img src="图.png" onerror="alert(1)"><img src="https://example.invalid/external.png"><img src="../private.png"><script>alert(2)</script><iframe src="bad.html"></iframe></body></html>"##).unwrap();
+        let book = TextBook::open(&file, Kind::Html).unwrap();
+        let chapter = book.read_chapter(0).unwrap();
+        assert!(chapter.contains(r#"<h1 id="hello">正文</h1>"#));
+        assert!(chapter.contains(r##"href="#hello""##));
+        assert!(chapter.contains("images/%E5%9B%BE%2Epng"));
+        for removed in [
+            "example.invalid",
+            "private.png",
+            "alert",
+            "iframe",
+            "<style",
+        ] {
+            assert!(!chapter.contains(removed), "{chapter}");
+        }
+        assert_eq!(
+            book.read_image("images/图.png").unwrap().0,
+            b"local picture"
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn markdown_does_not_split_fenced_code_and_uses_later_reference_definitions() {

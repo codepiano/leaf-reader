@@ -153,7 +153,7 @@ fn content(
                 mime,
             )),
             SessionBook::Text(book) => book.read_image(&asset),
-            SessionBook::Pdf(_) => Err("PDF 不支持共读".into()),
+            SessionBook::Pdf(_) | SessionBook::Comic(_) => Err("分页图书不支持共读".into()),
         };
     }
     let index: usize = route
@@ -168,7 +168,7 @@ fn content(
     let title = match &session.book {
         SessionBook::Epub(book) => &book.title,
         SessionBook::Text(book) => &book.title,
-        SessionBook::Pdf(_) => return Err("PDF 不支持共读".into()),
+        SessionBook::Pdf(_) | SessionBook::Comic(_) => return Err("分页图书不支持共读".into()),
     }
     .clone();
     let total = session.view_chapters.len();

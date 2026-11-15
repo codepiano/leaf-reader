@@ -63,8 +63,8 @@ pub fn info(state: &ReaderState, source_id: &str, part_id: Option<&str>) -> Resu
         .fold(0u64, |total, (_, value)| total.saturating_add(*value));
     drop(library);
     let (size, modified, file_error) = match fs::metadata(&book.path) {
-        Ok(m) if m.is_file() => (
-            Some(m.len()),
+        Ok(m) if m.is_file() || m.is_dir() => (
+            m.is_file().then_some(m.len()),
             m.modified()
                 .ok()
                 .and_then(|t| t.duration_since(UNIX_EPOCH).ok())

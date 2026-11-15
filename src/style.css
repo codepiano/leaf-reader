@@ -875,10 +875,6 @@ p {
 .reader-caption-actions wa-button {
   white-space: nowrap;
 }
-.reader-caption button {
-  padding: 0;
-  flex-shrink: 0;
-}
 .reader-view iframe {
   width: 100%;
   flex: 1;
@@ -923,7 +919,8 @@ p {
   padding: 16px;
   background: var(--surface, var(--bg));
 }
-#pdf-viewport canvas {
+#pdf-viewport canvas,
+#pdf-viewport img {
   display: block;
   margin-inline: auto;
   background: white;
@@ -1949,3 +1946,21 @@ select {
 .remove-book-button { margin-right: auto; }
 wa-button.remove-book-button::part(button) { color: #945348; }
 wa-button.danger-button::part(button) { background: #945348; border-color: #945348; }
+
+#pdf-viewport img {
+  max-width: none;
+  height: auto;
+}
+
+#poetry {
+  padding: .45em .75em;
+  font-size: 13px;
+}
+
+#poetry[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
+}
+
+.reading #open-directory { display: none; }

@@ -58,7 +58,7 @@ pub fn configure(state: &ReaderState, directories: Vec<String>) -> Result<Vec<St
 // Only metadata is read during discovery. Sessions, reading times and source files are untouched.
 pub fn scan(state: &ReaderState) -> Result<Report, String> {
     let _scan = SCAN_LOCK.lock().map_err(|e| e.to_string())?;
-    let (directories, mut known, aliases, excluded) = {
+    let (mut directories, mut known, aliases, excluded) = {
         let library = state.library.lock().map_err(|e| e.to_string())?;
         let records: HashMap<_, _> = library
             .recent
@@ -109,6 +109,8 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
     let mut discoveries = Vec::new();
     let mut unreadable = HashSet::new();
     let mut entries = 0;
+    let mut directory_books = Vec::<PathBuf>::new();
+    directories.sort_by_key(|root| Path::new(root).components().count());
     'roots: for root in directories {
         let root = PathBuf::from(root);
         let root = match root.canonicalize() {
@@ -118,58 +120,74 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
                 continue;
             }
         };
-        if !visited.insert(root.clone()) {
+        if directory_books
+            .iter()
+            .any(|book| root != *book && root.starts_with(book))
+        {
             continue;
         }
-        let reader = match fs::read_dir(&root) {
-            Ok(r) => r,
-            Err(e) => {
-                report.error(&root, e);
-                continue;
-            }
-        };
-        let mut stack = vec![(root, reader)];
-        while let Some((parent, reader)) = stack.last_mut() {
-            let entry = match reader.next() {
-                None => {
-                    stack.pop();
-                    continue;
+        let mut stack: Vec<(PathBuf, fs::ReadDir)> = Vec::new();
+        let mut first = Some(root);
+        loop {
+            let (path, kind) = if let Some(root) = first.take() {
+                match fs::symlink_metadata(&root) {
+                    Ok(meta) if meta.is_dir() => (root, meta.file_type()),
+                    _ => continue 'roots,
                 }
-                Some(Err(e)) => {
-                    report.error(parent, e);
-                    continue;
+            } else {
+                let Some((parent, reader)) = stack.last_mut() else {
+                    break;
+                };
+                let entry = match reader.next() {
+                    None => {
+                        stack.pop();
+                        continue;
+                    }
+                    Some(Err(e)) => {
+                        report.error(parent, e);
+                        continue;
+                    }
+                    Some(Ok(entry)) => entry,
+                };
+                let path = entry.path();
+                match entry.file_type() {
+                    Ok(kind) => (path, kind),
+                    Err(e) => {
+                        report.error(&path, e);
+                        continue;
+                    }
                 }
-                Some(Ok(entry)) => entry,
             };
             entries += 1;
             if entries > ENTRY_LIMIT {
                 report.truncated = true;
                 break 'roots;
             }
-            let path = entry.path();
-            let kind = match entry.file_type() {
-                Ok(kind) => kind,
-                Err(e) => {
-                    report.error(&path, e);
-                    continue;
-                }
-            };
             if kind.is_symlink() {
                 continue;
             }
-            if kind.is_dir() {
-                if visited.insert(path.clone()) {
-                    match fs::read_dir(&path) {
-                        Ok(reader) => stack.push((path, reader)),
-                        Err(e) => report.error(&path, e),
+            let format = if kind.is_dir() {
+                let key = path.to_string_lossy();
+                if !(record_paths.contains(key.as_ref())
+                    || excluded.contains(key.as_ref())
+                    || text_book::has_directory_index(&path))
+                {
+                    if visited.insert(path.clone()) {
+                        match fs::read_dir(&path) {
+                            Ok(reader) => stack.push((path, reader)),
+                            Err(e) => report.error(&path, e),
+                        }
                     }
+                    continue;
                 }
-                continue;
-            }
-            if !kind.is_file() {
-                continue;
-            }
-            let Ok(format) = Kind::from_path(&path) else {
+                directory_books.push(path.clone());
+                Kind::MarkdownDirectory
+            } else if kind.is_file() {
+                let Ok(format) = Kind::from_path(&path) else {
+                    continue;
+                };
+                format
+            } else {
                 continue;
             };
             if !seen_files.insert(path.clone()) {
@@ -196,7 +214,9 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
                     Book::open(&path).map(|book| (book.title, book.author, book.chapters.len()))
                 }
                 Kind::Pdf => pdf::Pdf::open(&path).map(|_| (pdf::title(&path), String::new(), 0)),
-                Kind::Markdown | Kind::Transcript => TextBook::open(&path, format)
+                Kind::Comic => comic::Comic::open(&path)
+                    .map(|comic| (pdf::title(&path), String::new(), comic.len())),
+                _ => TextBook::open(&path, format)
                     .map(|book| (book.title, String::new(), book.chapters.len())),
             };
             match metadata {
@@ -227,7 +247,7 @@ pub fn scan(state: &ReaderState) -> Result<Report, String> {
         .cloned()
         .chain(discoveries.iter().map(|book| book.path.clone()))
         .map(|path| {
-            let available = Path::new(&path).is_file();
+            let available = fs::metadata(&path).is_ok_and(|m| m.is_file() || m.is_dir());
             (path, available)
         })
         .collect();

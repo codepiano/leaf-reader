@@ -347,7 +347,7 @@ export class Shelf {
     $("#shelf").innerHTML =
       list.map((i, n) => this.card(i, n)).join("") +
       (all.length && this.filter.kind === "all" && !q
-        ? `<button id="add-card" class="add-card">${this.icon("plus")}<span>打开另一本书</span><small>本地 EPUB、PDF、Markdown 或 TXT</small></button>`
+        ? `<button id="add-card" class="add-card">${this.icon("plus")}<span>打开另一本书</span><small>打开本地电子书、漫画或文本</small></button>`
         : "");
     this.covers.bind($("#shelf"));
     $("#add-card")?.addEventListener("click", () =>

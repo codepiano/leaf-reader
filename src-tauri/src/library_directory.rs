@@ -105,8 +105,11 @@ pub fn source(state: &ReaderState, path: &Path, importing: bool) -> Result<PathB
         .canonicalize()
         .map_err(|e| format!("无法访问原文件：{e}"))?;
     let format = Kind::from_path(&source)?;
-    // Keep single-file Markdown beside its relative images.
-    if format == Kind::Markdown {
+    // Keep text with relative resources in its original directory.
+    if matches!(
+        format,
+        Kind::Markdown | Kind::MarkdownDirectory | Kind::Html
+    ) {
         return Ok(source);
     }
     let extension = source.extension().unwrap_or_default().to_string_lossy();
@@ -121,7 +124,8 @@ pub fn source(state: &ReaderState, path: &Path, importing: bool) -> Result<PathB
         Kind::Epub => drop(Book::open(&source)?),
         Kind::Pdf => drop(pdf::Pdf::open(&source)?),
         Kind::Transcript => drop(TextBook::open(&source, format)?),
-        Kind::Markdown => return Ok(source),
+        Kind::Comic => drop(comic::Comic::open(&source)?),
+        _ => return Ok(source),
     }
     let name = source.file_name().ok_or("文件名无效")?;
     let stem = source.file_stem().ok_or("文件名无效")?.to_string_lossy();

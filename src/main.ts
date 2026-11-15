@@ -25,7 +25,7 @@ import { initScanDirectories } from "./scan-directories";
 import { ReadingClock } from "./reading-clock";
 import { initBookInfo, showBookInfo } from "./book-info";
 import { initLibrarySettings } from "./library-settings";
-import type { PdfReader } from "./pdf-reader";
+import type { PagedReader } from "./paged-reader";
 
 initFocus();
 
@@ -59,7 +59,7 @@ function loadSettings(): Settings {
 }
 let settings = loadSettings();
 let book: Book | null = null;
-let pdf: PdfReader | undefined;
+let paged: PagedReader | undefined;
 let browserReading = false;
 let browserRequestPending = false;
 let chapter = 0;
@@ -127,16 +127,16 @@ $("#app").innerHTML = `
     <div class="sidebar-bottom"><div class="local-badge"><span></span>本地存储 · 离线可用</div><p>给阅读，留一点空间。</p><span class="version">LEAF READER / 0.1</span></div>
   </aside>
   <main>
-    <header class="topbar"><div class="topbar-start"><button type="button" id="library-sidebar-toggle" class="quiet-button" aria-label="书架侧栏" aria-expanded="true" aria-controls="library-sidebar" title="收起书架侧栏">${icon("sidebar")}</button><div id="breadcrumb">书架 <span>/</span> 全部书籍</div></div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><button type="button" id="toc-toggle" class="quiet-button" aria-label="本书目录" title="本书目录" aria-expanded="false" aria-controls="toc-panel" hidden>${icon("list")}<span>目录</span></button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开书籍</wa-button></div></header>
+    <header class="topbar"><div class="topbar-start"><button type="button" id="library-sidebar-toggle" class="quiet-button" aria-label="书架侧栏" aria-expanded="true" aria-controls="library-sidebar" title="收起书架侧栏">${icon("sidebar")}</button><div id="breadcrumb">书架 <span>/</span> 全部书籍</div></div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><button type="button" id="toc-toggle" class="quiet-button" aria-label="本书目录" title="本书目录" aria-expanded="false" aria-controls="toc-panel" hidden>${icon("list")}<span>目录</span></button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开书籍</wa-button><wa-button id="open-directory" class="quiet-button" size="small" title="打开 Markdown 目录">打开目录</wa-button></div></header>
     <section id="library-view" class="library-view">
       <div class="shelf-heading"><h2>我的书架 <span id="shelf-count">0 本</span></h2><span class="muted">最近阅读</span></div>
       <div id="shelf" class="shelf"></div>
       <div id="empty" class="empty-state"><div class="empty-art">${icon("book")}<span class="art-leaf">${icon("leaf")}</span></div><h2>下一段旅程，从这里开始</h2><p>打开一本书，把喜欢的文字放在手边。<br>也可以将文件拖到窗口中。</p><wa-button id="empty-open" class="primary-button" size="small">${icon("folder")}选择本地书籍</wa-button><wa-button id="demo" class="text-button" size="small">先读一段示例 ${icon("arrow")}</wa-button><div class="empty-foot">无需账号 · 无需联网 · 只专注阅读</div></div>
-      <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB · PDF · Markdown · TXT</span></footer>
+      <footer class="library-footer"><span>${icon("leaf")}一本书，一段属于自己的时间。</span><span>EPUB · PDF · CBZ · HTML · Markdown · TXT</span></footer>
     </section>
     <div id="reader-workspace" hidden>
     <section id="reader-view" class="reader-view">
-      <div class="reader-caption"><span id="chapter-caption"></span><div class="reader-caption-actions"><wa-button id="browser-reading" class="quiet-button" size="s" hidden>浏览器共读</wa-button><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div></div>
+      <div class="reader-caption"><span id="chapter-caption"></span><div class="reader-caption-actions"><button type="button" id="poetry" class="quiet-button" aria-pressed="false" hidden>诗歌排版</button><wa-button id="browser-reading" class="quiet-button" size="s" hidden>浏览器共读</wa-button><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div></div>
       <div id="chapter-loading" class="chapter-loading" role="status" hidden></div>
       <div id="pdf-tools" hidden>
         <form id="pdf-jump">
@@ -153,7 +153,7 @@ $("#app").innerHTML = `
         </div>
       </div>
       <iframe id="reader" title="书籍正文" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
-      <div id="pdf-viewport" role="region" aria-label="PDF 正文" tabindex="0" hidden></div>
+      <div id="pdf-viewport" role="region" aria-label="分页正文" tabindex="0" hidden></div>
       <footer class="reader-footer"><wa-button id="prev" class="quiet-button" size="small">${icon("left")}<span id="prev-label">上一章</span></wa-button><div><span id="position"></span><progress id="reading-progress" class="progress-track" max="100" value="0" aria-label="阅读进度"></progress></div><wa-button id="next" class="quiet-button" size="small"><span id="next-label">下一章</span>${icon("right")}</wa-button></footer>
     </section>
     <aside id="toc-panel" aria-labelledby="toc-title" hidden>
@@ -257,7 +257,7 @@ function setReadingView(reading: boolean) {
   $("#reader-workspace").hidden = !reading;
   $("#library-view").hidden = reading;
   document.body.classList.toggle("reading", reading);
-  tocSidebar.setReading(reading);
+  tocSidebar.setReading(reading && book?.comic_pages === undefined);
 }
 function navigateFromToc(c: number, f = 0, anchor = "") {
   tocSidebar.dismissTemporary(true);
@@ -392,7 +392,7 @@ function flushProgress() {
     .catch(() => {})
     .then(async () => {
       await readingClock.flush();
-      const value = pdf ? 1 : await readPosition();
+      const value = paged ? 1 : await readPosition();
       await invoke("save_progress", { token, chapter: index, fraction: value });
     });
   return saveChain;
@@ -468,12 +468,12 @@ window.addEventListener("message", (e) => {
 });
 function updateBrowserReading() {
   const control = $<WaButton>("#browser-reading");
-  control.hidden = !book || book.pdf_size !== undefined;
+  control.hidden = !book || isPaged(book);
   control.disabled = browserRequestPending || (!browserReading && (!readerReady || busy || loadingChapter));
   control.textContent = browserReading ? "结束浏览器共读" : "浏览器共读";
 }
 $("#browser-reading").onclick = async () => {
-  if (!book || book.pdf_size !== undefined || browserRequestPending) return;
+  if (!book || isPaged(book) || browserRequestPending) return;
   const current = book;
   browserRequestPending = true;
   updateBrowserReading();
@@ -496,15 +496,15 @@ $("#browser-reading").onclick = async () => {
 function updatePosition() {
   updateBrowserReading();
   if (!book) return;
-  if (pdf) {
-    const progress = readingPercent((chapter + 1) / pdf.pages);
-    $("#position").textContent = `${chapter + 1} / ${pdf.pages} 页 · ${progress}%`;
+  if (paged) {
+    const progress = readingPercent((chapter + 1) / paged.pages);
+    $("#position").textContent = `${chapter + 1} / ${paged.pages} 页 · ${progress}%`;
     $<HTMLProgressElement>("#reading-progress").value = progress;
     $<WaButton>("#prev").disabled = loadingChapter || chapter === 0;
-    $<WaButton>("#next").disabled = loadingChapter || chapter === pdf.pages - 1;
-    $<HTMLInputElement>("#pdf-page").max = String(pdf.pages);
-    $("#pdf-total").textContent = `/ ${pdf.pages}`;
-    syncPdfControls();
+    $<WaButton>("#next").disabled = loadingChapter || chapter === paged.pages - 1;
+    $<HTMLInputElement>("#pdf-page").max = String(paged.pages);
+    $("#pdf-total").textContent = `/ ${paged.pages}`;
+    syncPageControls();
     tocTree.active(chapter);
     return;
   }
@@ -545,12 +545,21 @@ async function openPath(
       readingClock.resume(book.token, book.track_reading_time ?? true);
   }
 }
+const isPaged = (opened: Book) => opened.pdf_size !== undefined || opened.comic_pages !== undefined;
+
+function updatePoetry() {
+  const button = $<HTMLButtonElement>("#poetry");
+  button.hidden = !book || isPaged(book);
+  button.setAttribute("aria-pressed", String(book?.metadata?.poetry ?? false));
+}
+
 async function presentBook(opened: Book) {
   clearReader();
-  await closePdf();
+  await closePaged();
   book = opened;
   browserReading = false;
   updateBrowserReading();
+  updatePoetry();
   $("#book-info").hidden = false;
   chapter = opened.progress.chapter;
   fraction = opened.progress.fraction;
@@ -573,13 +582,13 @@ async function presentBook(opened: Book) {
     document.title = `${book.title} · Leaf`;
     return;
   }
-  const isPdfBook = opened.pdf_size !== undefined;
-  $("#reader").hidden = isPdfBook;
-  $("#pdf-viewport").hidden = !isPdfBook;
+  const isPagedBook = isPaged(opened);
+  $("#reader").hidden = isPagedBook;
+  $("#pdf-viewport").hidden = !isPagedBook;
   $("#pdf-tools").hidden = true;
-  $("#prev-label").textContent = isPdfBook ? "上一页" : "上一章";
-  $("#next-label").textContent = isPdfBook ? "下一页" : "下一章";
-  $("#chapter-loading").textContent = isPdfBook ? "正在打开 PDF…" : "正在打开章节…";
+  $("#prev-label").textContent = isPagedBook ? "上一页" : "上一章";
+  $("#next-label").textContent = isPagedBook ? "下一页" : "下一章";
+  $("#chapter-loading").textContent = isPagedBook ? "正在打开页面…" : "正在打开章节…";
   progressOffsets = [0];
   for (let i = 0; i < book.chapters.length; i++) {
     progressOffsets.push(progressOffsets[i] + (book.progress_weights?.[i] ?? 1));
@@ -590,9 +599,9 @@ async function presentBook(opened: Book) {
     ? `${book.source_title} / ${book.title}`
     : `阅读 / ${book.title}`;
   document.title = `${book.title} · Leaf`;
-  if (opened.pdf_size !== undefined) {
+  if (isPagedBook) {
     try {
-      await presentPdf(opened, opened.pdf_size);
+      await presentPaged(opened);
     } catch (error) {
       await returnToShelf({ kind: "all" });
       throw error;
@@ -602,26 +611,33 @@ async function presentBook(opened: Book) {
   tocTree.render(book, navigateFromToc, openPartFromToc);
   await renderChapter(chapter, fraction);
 }
-async function pickBook() {
+async function pickBook(directory = false) {
   if (busy) return;
   try {
     const path = await open({
       multiple: false,
-      directory: false,
-      filters: [{ name: "电子书", extensions: ["epub", "pdf", "md", "markdown", "txt"] }],
+      directory,
+      ...(directory ? {} : { filters: [{ name: "电子书", extensions: ["epub", "pdf", "cbz", "htm", "html", "md", "markdown", "txt"] }] }),
     });
     if (typeof path === "string") await openPath(path, false, undefined, true);
   } catch (e) {
     showError(e);
   }
 }
+const poetryCSS = `
+  body{max-width:38em!important;font-family:"Songti SC","Noto Serif CJK SC",Georgia,serif!important}
+  p{white-space:pre-wrap!important;margin:1.5em 0!important}
+  h1,h2,h3{text-align:center!important}
+  h1+h2{margin-top:.75em!important}
+`;
+
 function readerCSS() {
   const colors = {
     paper: ["#f6f5f0", "#373c35", "#687b5d"],
     white: ["#fff", "#303630", "#627c55"],
     night: ["#222723", "#cbd2c7", "#a6bc95"],
   }[settings.theme];
-  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}::selection{background:#b9c7a8;color:#1f3020}${transcriptCSS}`;
+  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}::selection{background:#b9c7a8;color:#1f3020}p.plain-text{white-space:pre-line}${transcriptCSS}${book?.metadata?.poetry ? poetryCSS : ""}`;
 }
 function buildChapter(source: string, path: string, loadId: string) {
   // Keep publisher styles, but never grant book markup scripts, forms, IPC or networking.
@@ -669,6 +685,34 @@ function buildChapter(source: string, path: string, loadId: string) {
   doc.body
     .querySelectorAll("style,link,title")
     .forEach((el) => doc.head.append(el));
+  if (!/\.epub$/i.test(book!.path)) {
+    const nodes = [...doc.body.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6")];
+    const used = new Set([...doc.querySelectorAll("[id]")].map((el) => el.id));
+    const htmlBook = /\.html?$/i.test(book!.path);
+    const headings: Toc[] = [];
+    const parents: { level: number; item: Toc }[] = [];
+    for (const node of nodes) {
+      const title = node.textContent?.trim();
+      if (!title) continue;
+      if (!node.id) {
+        const slug = title.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, "").replace(/\s/g, "-") || "heading";
+        let id = slug;
+        for (let suffix = 1; used.has(id); suffix++) id = `${slug}-${suffix}`;
+        node.id = id;
+        used.add(id);
+      }
+      if (!htmlBook) continue;
+      const level = Number(node.tagName[1]);
+      while (parents.length && parents.at(-1)!.level >= level) parents.pop();
+      const item = { id: `heading-${node.id}`, title, chapter, fragment: node.id, children: [] };
+      (parents.at(-1)?.item.children ?? headings).push(item);
+      parents.push({ level, item });
+    }
+    if (headings.length) {
+      book!.toc = headings;
+      tocTree.render(book!, navigateFromToc, openPartFromToc);
+    }
+  }
   const scope = book!.chapters[chapter];
   if (scope?.start_fragment || scope?.end_fragment) {
     const start = scope.start_fragment
@@ -764,23 +808,23 @@ async function renderChapter(index: number, targetFraction = 0, fragment = "") {
     }
   }
 }
-function syncPdfControls() {
-  if (!pdf) return;
-  $("#pdf-scale").textContent = `${Math.round(pdf.scale * 100)}%`;
-  $("#pdf-fit").setAttribute("aria-pressed", String(pdf.isFit));
-  $<HTMLButtonElement>("#pdf-zoom-out").disabled = loadingChapter || pdf.scale <= 0.25;
-  $<HTMLButtonElement>("#pdf-zoom-in").disabled = loadingChapter || pdf.scale >= 5;
+function syncPageControls() {
+  if (!paged) return;
+  $("#pdf-scale").textContent = `${Math.round(paged.scale * 100)}%`;
+  $("#pdf-fit").setAttribute("aria-pressed", String(paged.isFit));
+  $<HTMLButtonElement>("#pdf-zoom-out").disabled = loadingChapter || paged.scale <= 0.25;
+  $<HTMLButtonElement>("#pdf-zoom-in").disabled = loadingChapter || paged.scale >= 5;
   $<HTMLButtonElement>("#pdf-fit").disabled = loadingChapter;
   $<HTMLButtonElement>("#pdf-go").disabled = loadingChapter;
 }
 
-async function closePdf() {
-  const current = pdf;
-  pdf = undefined;
+async function closePaged() {
+  const current = paged;
+  paged = undefined;
   if (current) await current.close();
 }
 
-async function presentPdf(opened: Book, size: number) {
+async function presentPaged(opened: Book) {
   $<HTMLIFrameElement>("#reader").srcdoc = "";
   $("#chapter-caption").textContent = opened.title;
   $("#position").textContent = "";
@@ -790,37 +834,41 @@ async function presentPdf(opened: Book, size: number) {
   $("#toc-count").textContent = "";
   $("#toc").textContent = "正在读取目录…";
   try {
-    const { openPdf } = await import("./pdf-reader");
-    const reader = await openPdf(opened.token, size, $("#pdf-viewport"), syncPdfControls);
-    pdf = reader;
+    const viewport = $("#pdf-viewport");
+    viewport.setAttribute("aria-label", opened.comic_pages ? "漫画正文" : "PDF 正文");
+    const reader = opened.comic_pages !== undefined
+      ? (await import("./comic-reader")).openComic(opened.token, opened.comic_pages, viewport, syncPageControls)
+      : await (await import("./pdf-reader")).openPdf(opened.token, opened.pdf_size!, viewport, syncPageControls);
+    paged = reader;
     chapter = Math.min(Math.max(0, chapter), reader.pages - 1);
     await reader.render(chapter);
-    await invoke("set_pdf_pages", { token: opened.token, pages: reader.pages });
+    if (!opened.comic_pages) await invoke("set_pdf_pages", { token: opened.token, pages: reader.pages });
     $("#pdf-tools").hidden = false;
     $<HTMLInputElement>("#pdf-page").value = String(chapter + 1);
     readerReady = true;
     updatePosition();
     await flushProgress();
+    if (opened.comic_pages !== undefined) return;
     void reader.outline().then((outline) => {
-      if (pdf !== reader) return;
+      if (paged !== reader) return;
       opened.toc = outline;
       tocTree.render(opened, navigateFromToc, openPartFromToc);
       tocTree.active(chapter, true);
     }).catch(() => {
-      if (pdf === reader) $("#toc").textContent = "无法读取 PDF 目录，可用页码跳转。";
+      if (paged === reader) $("#toc").textContent = "无法读取 PDF 目录，可用页码跳转。";
     });
   } finally {
     $("#chapter-loading").hidden = true;
   }
 }
 
-async function renderPdfPage(index: number, zoom?: number | null) {
-  if (!pdf || loadingChapter) return;
-  if (zoom !== undefined) pdf.zoomTo(zoom);
+async function renderPage(index: number, zoom?: number | null) {
+  if (!paged || loadingChapter) return;
+  if (zoom !== undefined) paged.zoomTo(zoom);
   loadingChapter = true;
   updatePosition();
   try {
-    if (await pdf.render(index, zoom !== undefined)) {
+    if (await paged.render(index, zoom !== undefined)) {
       chapter = index;
       $<HTMLInputElement>("#pdf-page").value = String(index + 1);
       tocTree.active(chapter, true);
@@ -839,10 +887,10 @@ $("#pdf-jump").onsubmit = (event) => {
 };
 for (const [id, factor] of [["pdf-zoom-out", 1 / 1.25], ["pdf-zoom-in", 1.25]] as const) {
   $(`#${id}`).onclick = () => {
-    if (pdf) void renderPdfPage(chapter, pdf.scale * factor).catch(showError);
+    if (paged) void renderPage(chapter, paged.scale * factor).catch(showError);
   };
 }
-$("#pdf-fit").onclick = () => void renderPdfPage(chapter, null).catch(showError);
+$("#pdf-fit").onclick = () => void renderPage(chapter, null).catch(showError);
 $("#pdf-viewport").onpointerdown = () => tocSidebar.dismissTemporary();
 
 async function navigate(index: number, targetFraction = 0, fragment = "") {
@@ -851,12 +899,12 @@ async function navigate(index: number, targetFraction = 0, fragment = "") {
     busy ||
     loadingChapter ||
     index < 0 ||
-    index >= (pdf?.pages ?? book.chapters.length)
+    index >= (paged?.pages ?? book.chapters.length)
   )
     return;
   try {
-    if (pdf) {
-      await renderPdfPage(index);
+    if (paged) {
+      await renderPage(index);
       return;
     }
     await flushProgress();
@@ -879,10 +927,11 @@ async function libraryView(filter: Filter = { kind: "all" }) {
 async function returnToShelf(filter: Filter) {
   ++revision;
   clearReader();
-  await closePdf();
+  await closePaged();
   book = null;
   browserReading = false;
   updateBrowserReading();
+  updatePoetry();
   $("#book-info").hidden = true;
   $<HTMLIFrameElement>("#reader").srcdoc = "";
   setReadingView(false);
@@ -966,12 +1015,34 @@ function onKey(e: KeyboardEvent) {
     if (e.key === " " || e.key === "PageDown" || e.key === "PageUp") {
       e.preventDefault();
       const direction = e.key === "PageUp" || e.shiftKey ? -1 : 1;
-      if (pdf) void navigate(chapter + direction);
+      if (paged) void navigate(chapter + direction);
       else sendReader("scroll", { direction });
     }
   }
 }
 $("#open").onclick = $("#empty-open").onclick = () => void pickBook();
+$("#open-directory").onclick = () => void pickBook(true);
+$<HTMLButtonElement>("#poetry").onclick = () => {
+  const current = book;
+  if (!current || isPaged(current)) return;
+  const button = $<HTMLButtonElement>("#poetry");
+  if (button.disabled) return;
+  button.disabled = true;
+  const enabled = !current.metadata.poetry;
+  void (async () => {
+    try {
+      await invoke("set_poetry", { token: current.token, enabled });
+      if (book !== current) return;
+      current.metadata.poetry = enabled;
+      updatePoetry();
+      sendReader("style", { css: readerCSS() });
+    } catch (e) {
+      showError(e);
+    } finally {
+      button.disabled = false;
+    }
+  })();
+};
 $("#demo").onclick = () => void openPath(undefined, true);
 $("#library-nav").onclick = () => void libraryView();
 $("#back").onclick = () =>
@@ -1053,10 +1124,9 @@ if (isTauri()) {
       e.payload.type !== "over" && e.payload.type !== "enter";
     if (e.payload.type === "drop") {
       const path = e.payload.paths.find((p) =>
-        /\.(epub|pdf|md|markdown|txt)$/i.test(p),
-      );
+        /\.(epub|pdf|cbz|html?|md|markdown|txt)$/i.test(p),
+      ) ?? e.payload.paths[0];
       if (path) void openPath(path, false, undefined, true);
-      else showError("请拖入 EPUB、PDF、Markdown 或 TXT 文件。");
     }
   });
   let closing = false;

@@ -52,6 +52,7 @@ export const emptyDetails = (): Details => ({
 });
 export type Metadata = {
   details: Details;
+  poetry?: boolean;
   group: string;
   tags: string[];
   favorite: boolean;
@@ -65,10 +66,11 @@ export type Candidate = {
   start: Location | null;
   suggested: boolean;
 };
-export const isPdf = (path: string) => /\.pdf$/i.test(path);
+export const isPagedFile = (path: string) => /\.(pdf|cbz)$/i.test(path);
 
 export type Book = {
   pdf_size?: number;
+  comic_pages?: number;
   token: string;
   track_reading_time?: boolean;
   id: string;
