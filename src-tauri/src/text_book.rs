@@ -5,7 +5,9 @@ use std::{borrow::Cow, io::Read};
 const TEXT_LIMIT: u64 = 16 * 1024 * 1024;
 const OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_STRIKETHROUGH)
-    .union(Options::ENABLE_FOOTNOTES);
+    .union(Options::ENABLE_FOOTNOTES)
+    .union(Options::ENABLE_TASKLISTS)
+    .union(Options::ENABLE_MATH);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -34,7 +36,7 @@ impl Kind {
             "pdf" => Ok(Self::Pdf),
             "cbz" => Ok(Self::Comic),
             "htm" | "html" => Ok(Self::Html),
-            "md" | "markdown" => Ok(Self::Markdown),
+            "md" | "markdown" | "mdown" | "mkd" => Ok(Self::Markdown),
             "txt" => Ok(Self::Transcript),
             _ => Err("请选择支持的电子书文件或 Markdown 目录".into()),
         }
@@ -46,6 +48,7 @@ pub struct TextBook {
     pub chapters: Vec<Chapter>,
     pub toc: Vec<TocEntry>,
     pub weights: Vec<u64>,
+    pub html_source: Option<String>,
     root: PathBuf,
     bodies: Vec<String>,
     images: HashSet<String>,
@@ -123,10 +126,12 @@ impl TextBook {
                 .map_err(|e| e.to_string())?,
             bodies: Vec::new(),
             images: HashSet::new(),
+            html_source: None,
         };
         match kind {
             Kind::Markdown => book.markdown(source)?,
             Kind::Html => {
+                book.html_source = Some(source.to_string());
                 let images = std::sync::Arc::new(Mutex::new(HashSet::new()));
                 let referenced = images.clone();
                 let source = ammonia::Builder::default()
@@ -241,6 +246,7 @@ impl TextBook {
             weights: Vec::new(),
             bodies: Vec::new(),
             images: HashSet::new(),
+            html_source: None,
         };
         let mut files = Vec::new();
         let mut pending = vec![root.clone()];
@@ -286,17 +292,30 @@ impl TextBook {
             .filter(|file| !is_marker(file))
             .cloned()
             .collect::<HashSet<_>>();
-        if let Some(index) = markers
+        let readme = files.iter().find(|f| is_readme(f));
+        let index = markers
             .iter()
-            .find_map(|marker| files.iter().find(|f| f.eq_ignore_ascii_case(marker)))
-        {
-            let bytes = read_limited(&root.join(index), TEXT_LIMIT)?;
+            .find_map(|marker| files.iter().find(|f| f.eq_ignore_ascii_case(marker)));
+        if let Some(readme) = readme.filter(|_| index.is_none()) {
+            ordered.push(readme.clone());
+            listed.insert(readme.clone());
+        }
+        for toc in [index, readme].into_iter().flatten() {
+            let bytes = read_limited(&root.join(toc), TEXT_LIMIT)?;
             let source = std::str::from_utf8(&bytes).map_err(|_| "目录索引应为 UTF-8")?;
             for event in Parser::new_ext(source, OPTIONS) {
                 if let Event::Start(Tag::Link { dest_url, .. }) = event {
-                    if let Ok(path) = epub::resolve(index, &dest_url) {
-                        if available.contains(&path) && listed.insert(path.clone()) {
-                            ordered.push(path);
+                    if let Ok(path) = epub::resolve(toc, &dest_url) {
+                        let chapter = available.get(&path).or_else(|| {
+                            let prefix = format!("{path}/");
+                            files.iter().find(|candidate| {
+                                candidate.strip_prefix(&prefix).is_some_and(is_readme)
+                            })
+                        });
+                        if let Some(chapter) =
+                            chapter.filter(|chapter| listed.insert((*chapter).clone()))
+                        {
+                            ordered.push(chapter.clone());
                         }
                     }
                 }
@@ -347,6 +366,14 @@ impl TextBook {
     fn markdown_event<'a>(&mut self, event: Event<'a>, source: &str, chapter: &str) -> Event<'a> {
         match event {
             Event::Html(s) | Event::InlineHtml(s) => Event::Text(s),
+            Event::TaskListMarker(checked) => Event::InlineHtml(
+                if checked {
+                    r#"<span class="task-mark" role="img" aria-label="已完成">☑</span> "#
+                } else {
+                    r#"<span class="task-mark" role="img" aria-label="未完成">☐</span> "#
+                }
+                .into(),
+            ),
             Event::Start(Tag::Image {
                 link_type,
                 dest_url,
@@ -408,10 +435,21 @@ impl TextBook {
     }
 }
 
+fn is_readme(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "readme.md" | "readme.markdown" | "readme.mdown" | "readme.mkd"
+    )
+}
+
 fn markdown_path(path: &Path) -> bool {
     path.extension()
         .and_then(|s| s.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"))
+        .is_some_and(|ext| {
+            ["md", "markdown", "mdown", "mkd"]
+                .iter()
+                .any(|item| ext.eq_ignore_ascii_case(item))
+        })
 }
 
 pub fn has_directory_index(path: &Path) -> bool {
@@ -569,6 +607,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn readme_orders_directory_links_and_renders_task_and_math_tokens() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::create_dir(directory.path().join("guide")).unwrap();
+        fs::write(directory.path().join("0.md"), "# Other").unwrap();
+        fs::write(
+            directory.path().join("README.md"),
+            "# Start\n\n[Guide](guide/)",
+        )
+        .unwrap();
+        fs::write(
+            directory.path().join("guide/README.md"),
+            "# Guide\n\n- [x] Task\n\n$x^2$",
+        )
+        .unwrap();
+        let book = TextBook::open(directory.path(), Kind::MarkdownDirectory).unwrap();
+        let order: Vec<_> = book.chapters.iter().map(|c| c.title.as_str()).collect();
+        assert_eq!(order, ["Start", "Guide", "Other"]);
+        let html = book.read_chapter(1).unwrap();
+        assert!(html.contains(r#"aria-label="已完成""#));
+        assert!(html.contains(r#"class="math math-inline">x^2"#));
+    }
+
+    #[test]
     fn html_keeps_local_images_and_page_anchors_without_active_content() {
         let dir = std::env::temp_dir().join(format!("leaf-html-{}", token()));
         fs::create_dir_all(&dir).unwrap();
@@ -614,6 +675,7 @@ mod tests {
             weights: vec![],
             bodies: vec![],
             images: HashSet::new(),
+            html_source: None,
         };
         book.markdown(input).unwrap();
         assert_eq!(book.chapters.len(), 3);

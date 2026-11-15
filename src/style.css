@@ -869,8 +869,10 @@ p {
 .reader-caption-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-inline-size: 0;
 }
 .reader-caption-actions wa-button {
   white-space: nowrap;
@@ -1964,3 +1966,20 @@ wa-button.danger-button::part(button) { background: #945348; border-color: #9453
 }
 
 .reading #open-directory { display: none; }
+
+.reading #github-book { display: none; }
+#html-source, #export-text { font-size: 13px; padding: .45em .75em; }
+.advanced-dialog:modal { overscroll-behavior: contain; }
+.advanced-dialog::backdrop { overflow: hidden; overscroll-behavior: contain; }
+#github-url { inline-size: 100%; }
+#github-status:empty { display: none; }
+#github-status { overflow-wrap: anywhere; }
+.source-dialog { inline-size: min(52rem, 85vw); }
+#html-source-text {
+  max-block-size: 55vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+  background: var(--surface);
+}

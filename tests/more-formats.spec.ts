@@ -8,7 +8,7 @@ const html = "/qa/export.html";
 const comic = "/qa/Comic.cbz";
 const bodies = [
   '<h1>秋</h1><p>第一行\n第二行</p><p>新一节</p><a href="2.md#春">去春天</a>',
-  '<h1>春</h1><p>新一章</p>',
+  '<h1>春</h1><p>新一章</p><h2>诗题</h2><p>诗行</p><span class="math math-inline">x^2</span><pre><code class="language-javascript">const spring = 2;</code></pre><span class="task-mark" role="img" aria-label="已完成">☑</span>',
 ];
 
 async function install(page: Page) {
@@ -32,12 +32,19 @@ async function install(page: Page) {
       __TAURI_INTERNALS__: {
         invoke: async (command: string, args: {
           path: string; index: number; chapter: number; fraction: number; enabled: boolean;
-          options?: { directory?: boolean };
+          options?: { directory?: boolean }; update?: boolean; url?: string; html?: string;
         }) => {
           switch (command) {
             case "library_snapshot": return library;
             case "library_settings": return { remember_position: true, track_reading_time: false };
             case "scan_directories": return ["/qa"];
+            case "prepare_github_book":
+              localStorage.setItem("github.request", JSON.stringify({ url: args.url, update: args.update }));
+              return { path: folder, status: args.update ? "updated" : "added" };
+            case "get_html_source": return "<script>document.body.textContent='ran'</script><h1>HTML 正文</h1>";
+            case "plugin:dialog|save": return "/qa/output.html";
+            case "text_export_images": return { "images/leaf.png": "data:image/png;base64,aW1hZ2U=" };
+            case "save_text_export": localStorage.setItem("html.export", args.html!); return;
             case "plugin:dialog|open": return args.options?.directory ? folder : html;
             case "open_book": {
               active = paths.indexOf(args.path);
@@ -142,4 +149,45 @@ test("reads CBZ pages with zoom, page jump and resume", async ({ page }) => {
   await page.reload();
   await page.getByRole("button", { name: "继续阅读 漫画样本" }).first().click();
   await expect(panel.getByAltText("漫画第 2 页")).toBeVisible();
+});
+
+test("opens a GitHub directory book with rendered formulas, highlighted code and a poem outline", async ({ page }) => {
+  await install(page);
+  await page.getByRole("button", { name: "GitHub 书籍" }).click();
+  const dialog = page.getByRole("dialog", { name: "GitHub 书籍" });
+  await dialog.getByLabel("公开仓库地址").fill("https://github.com/example/poems");
+  await page.screenshot({ path: "test-results/leaf-github-wide.png" });
+  await page.setViewportSize({ width: 800, height: 620 });
+  await dialog.getByLabel("公开仓库地址").focus();
+  await page.screenshot({ path: "test-results/leaf-github-narrow.png" });
+  await dialog.getByRole("button", { name: "检查并更新" }).click();
+  const reader = page.frameLocator("#reader");
+  await reader.getByRole("link", { name: "去春天" }).click();
+  await expect(reader.locator("math")).toContainText("x");
+  await expect(reader.locator(".hljs-keyword")).toHaveText("const");
+  await expect(reader.getByRole("img", { name: "已完成" })).toHaveText("☑");
+  await page.getByRole("button", { name: "诗歌排版" }).click();
+  const toggle = page.getByRole("button", { name: "本书目录" });
+  if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+  await expect(page.getByRole("button", { name: "诗题" })).toBeVisible();
+  await page.getByRole("button", { name: "诗题" }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("github.request")!))).toEqual({
+    url: "https://github.com/example/poems", update: true,
+  });
+});
+
+test("shows HTML source as text and exports an independent rendered chapter", async ({ page }) => {
+  await install(page);
+  await page.getByRole("button", { name: "打开书籍" }).click();
+  await expect(page.frameLocator("#reader").getByRole("heading", { name: "HTML 正文" })).toBeVisible();
+  await page.getByRole("button", { name: "HTML 原文" }).click();
+  const source = page.getByRole("dialog", { name: "HTML 原文" });
+  await expect(source.locator("pre")).toContainText("<script>");
+  await expect(source.locator("script")).toHaveCount(0);
+  await source.getByRole("button", { name: "关闭" }).click();
+  await page.getByRole("button", { name: "导出 HTML" }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("html.export"))).toContain("data:image/png;base64,");
+  const output = await page.evaluate(() => localStorage.getItem("html.export"));
+  expect(output).toContain("HTML 正文");
+  expect(output).not.toContain("<script");
 });

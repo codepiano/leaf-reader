@@ -5,6 +5,7 @@ mod comic;
 mod cover;
 mod details;
 mod epub;
+mod github;
 mod kindle;
 mod library_directory;
 mod pdf;
@@ -664,6 +665,90 @@ async fn get_chapter(app: tauri::AppHandle, token: String, index: usize) -> Resu
     .await
     .map_err(|e| e.to_string())?
 }
+#[tauri::command]
+fn get_html_source(state: tauri::State<ReaderState>, token: String) -> Result<String, String> {
+    let active = state.session.lock().map_err(|e| e.to_string())?;
+    let session = active
+        .as_ref()
+        .filter(|s| s.token == token)
+        .ok_or("书籍已关闭")?;
+    match &session.book {
+        SessionBook::Text(book) => book
+            .html_source
+            .clone()
+            .ok_or_else(|| "此书没有 HTML 原文".into()),
+        _ => Err("此书没有 HTML 原文".into()),
+    }
+}
+
+#[tauri::command]
+fn text_export_images(
+    state: tauri::State<ReaderState>,
+    token: String,
+    paths: Vec<String>,
+) -> Result<HashMap<String, String>, String> {
+    use base64::Engine;
+    let active = state.session.lock().map_err(|e| e.to_string())?;
+    let session = active
+        .as_ref()
+        .filter(|s| s.token == token)
+        .ok_or("书籍已关闭")?;
+    let SessionBook::Text(book) = &session.book else {
+        return Err("此书不支持文本导出".into());
+    };
+    if paths.len() > 128 {
+        return Err("当前章节的图片过多，无法导出".into());
+    }
+    let mut total = 0;
+    let mut images = HashMap::new();
+    for path in paths {
+        if let Ok((bytes, mime)) = book.read_image(&path) {
+            total += bytes.len();
+            if total > 12 * 1024 * 1024 {
+                return Err("当前章节的图片超过 12 MB，无法导出".into());
+            }
+            let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+            images.insert(path, format!("data:{mime};base64,{encoded}"));
+        }
+    }
+    Ok(images)
+}
+
+#[tauri::command]
+fn save_text_export(
+    state: tauri::State<ReaderState>,
+    token: String,
+    path: String,
+    html: String,
+) -> Result<(), String> {
+    let active = state.session.lock().map_err(|e| e.to_string())?;
+    if !active
+        .as_ref()
+        .is_some_and(|s| s.token == token && matches!(s.book, SessionBook::Text(_)))
+    {
+        return Err("书籍已关闭或不支持导出".into());
+    }
+    let path = Path::new(&path);
+    if html.len() > 48 * 1024 * 1024
+        || !path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("html"))
+    {
+        return Err("请选择有效的 HTML 文件，大小不能超过 48 MB".into());
+    }
+    use std::io::Write;
+    let parent = path.parent().ok_or("没有选择导出目录")?;
+    let mut staged = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    staged
+        .write_all(html.as_bytes())
+        .map_err(|e| format!("无法保存 HTML：{e}"))?;
+    staged
+        .persist(path)
+        .map_err(|e| format!("无法保存 HTML：{e}"))?;
+    Ok(())
+}
+
 fn write_progress(
     state: &ReaderState,
     token: &str,
@@ -1062,6 +1147,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             open_book,
+            github::prepare_github_book,
+            get_html_source,
+            text_export_images,
+            save_text_export,
             open_demo,
             browser_reading::open_browser_reading,
             browser_reading::stop_browser_reading,

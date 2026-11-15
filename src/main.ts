@@ -1,7 +1,7 @@
 import { initFocus, showDialog } from "./focus";
 import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import DOMPurify from "dompurify";
 import "@awesome.me/webawesome/dist/styles/themes/default.css";
 import "@awesome.me/webawesome/dist/components/button/button.js";
@@ -9,6 +9,7 @@ import type WaSlider from "@awesome.me/webawesome/dist/components/slider/slider.
 import type WaSelect from "@awesome.me/webawesome/dist/components/select/select.js";
 import type WaButton from "@awesome.me/webawesome/dist/components/button/button.js";
 import "./style.css";
+import markdownCSS from "./markdown-rich.css?inline";
 import transcriptCSS from "../src-tauri/reading-transcript.css?inline";
 import {
   type Book,
@@ -127,7 +128,7 @@ $("#app").innerHTML = `
     <div class="sidebar-bottom"><div class="local-badge"><span></span>本地存储 · 离线可用</div><p>给阅读，留一点空间。</p><span class="version">LEAF READER / 0.1</span></div>
   </aside>
   <main>
-    <header class="topbar"><div class="topbar-start"><button type="button" id="library-sidebar-toggle" class="quiet-button" aria-label="书架侧栏" aria-expanded="true" aria-controls="library-sidebar" title="收起书架侧栏">${icon("sidebar")}</button><div id="breadcrumb">书架 <span>/</span> 全部书籍</div></div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><button type="button" id="toc-toggle" class="quiet-button" aria-label="本书目录" title="本书目录" aria-expanded="false" aria-controls="toc-panel" hidden>${icon("list")}<span>目录</span></button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开书籍</wa-button><wa-button id="open-directory" class="quiet-button" size="small" title="打开 Markdown 目录">打开目录</wa-button></div></header>
+    <header class="topbar"><div class="topbar-start"><button type="button" id="library-sidebar-toggle" class="quiet-button" aria-label="书架侧栏" aria-expanded="true" aria-controls="library-sidebar" title="收起书架侧栏">${icon("sidebar")}</button><div id="breadcrumb">书架 <span>/</span> 全部书籍</div></div><div class="top-actions"><wa-button id="book-info" class="quiet-button" size="s" hidden>图书信息</wa-button><wa-button id="collection-mode" class="quiet-button" size="s" hidden>合集模式</wa-button><wa-button id="appearance" class="quiet-button" aria-expanded="false" aria-controls="settings-panel" title="阅读设置" size="small">Aa <span>阅读设置</span></wa-button><button type="button" id="toc-toggle" class="quiet-button" aria-label="本书目录" title="本书目录" aria-expanded="false" aria-controls="toc-panel" hidden>${icon("list")}<span>目录</span></button><span class="divider"></span><wa-button id="open" class="primary-button" size="small">${icon("plus")}打开书籍</wa-button><wa-button id="open-directory" class="quiet-button" size="small" title="打开 Markdown 目录">打开目录</wa-button><wa-button id="github-book" class="quiet-button" size="small">GitHub 书籍</wa-button></div></header>
     <section id="library-view" class="library-view">
       <div class="shelf-heading"><h2>我的书架 <span id="shelf-count">0 本</span></h2><span class="muted">最近阅读</span></div>
       <div id="shelf" class="shelf"></div>
@@ -136,7 +137,7 @@ $("#app").innerHTML = `
     </section>
     <div id="reader-workspace" hidden>
     <section id="reader-view" class="reader-view">
-      <div class="reader-caption"><span id="chapter-caption"></span><div class="reader-caption-actions"><button type="button" id="poetry" class="quiet-button" aria-pressed="false" hidden>诗歌排版</button><wa-button id="browser-reading" class="quiet-button" size="s" hidden>浏览器共读</wa-button><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div></div>
+      <div class="reader-caption"><span id="chapter-caption"></span><div class="reader-caption-actions"><button type="button" id="poetry" class="quiet-button" aria-pressed="false" hidden>诗歌排版</button><button type="button" id="html-source" class="quiet-button" hidden>HTML 原文</button><button type="button" id="export-text" class="quiet-button" hidden>导出 HTML</button><wa-button id="browser-reading" class="quiet-button" size="s" hidden>浏览器共读</wa-button><wa-button id="back" class="text-button" size="small">返回书架</wa-button></div></div>
       <div id="chapter-loading" class="chapter-loading" role="status" hidden></div>
       <div id="pdf-tools" hidden>
         <form id="pdf-jump">
@@ -172,6 +173,26 @@ document.body.insertAdjacentHTML(
   "beforeend",
   `<dialog id="collection-dialog" class="app-dialog collection-dialog"><div class="dialog-heading"><div><div class="eyebrow">合集模式</div><h2>选择要作为子书的目录</h2></div><wa-button id="collection-close" class="icon-button" aria-label="关闭合集设置" size="s">×</wa-button></div><p class="dialog-description">逻辑拆分，共用原 EPUB；每本子书单独记录进度。不会生成或改写 EPUB 文件。</p><p class="field-hint">默认只展示第一层，点击箭头逐级展开。勾选子书的起始分组；未链接的标题将使用其第一段正文作为起点。首个起点之前的内容保留在合集“附加内容”中，不计为子书。</p><div id="collection-candidates"></div><p id="collection-selection" class="field-hint"></p><p id="collection-error" role="alert" hidden></p><div class="dialog-actions"><wa-button id="collection-disable" class="quiet-button" size="s" hidden>恢复整本阅读</wa-button><wa-button id="collection-apply" class="primary-button" size="s">转为合集模式</wa-button></div></dialog>`,
 );
+document.body.insertAdjacentHTML("beforeend", `
+  <dialog id="github-dialog" class="app-dialog advanced-dialog" aria-labelledby="github-title">
+    <div class="dialog-heading"><h2 id="github-title">GitHub 书籍</h2></div>
+    <form id="github-form">
+      <label class="form-field">公开仓库地址<input id="github-url" class="field-input" type="url" required placeholder="https://github.com/owner/repo" spellcheck="false"></label>
+      <p class="field-hint">将仓库中的 Markdown 加为一本书。已有书籍可在这里检查并更新。</p>
+      <p id="github-status" role="status"></p>
+      <div class="dialog-actions">
+        <button class="quiet-button" type="button" id="github-cancel">取消</button>
+        <button class="quiet-button" type="submit" value="update">检查并更新</button>
+        <button class="primary-button" type="submit" value="open">打开书籍</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="html-source-dialog" class="app-dialog advanced-dialog source-dialog" aria-labelledby="html-source-title">
+    <div class="dialog-heading"><h2 id="html-source-title">HTML 原文</h2></div>
+    <pre id="html-source-text" tabindex="0"></pre>
+    <form method="dialog" class="dialog-actions"><button class="quiet-button">关闭</button></form>
+  </dialog>
+`);
 const librarySidebar = $("#library-sidebar");
 const librarySidebarToggle = $<HTMLButtonElement>("#library-sidebar-toggle");
 const librarySidebarPreference = "leaf.library-sidebar-collapsed";
@@ -458,7 +479,12 @@ window.addEventListener("message", (e) => {
         .split("/")
         .slice(2)
         .join("/");
-      const target = book.chapters.findIndex((c) => c.path === path);
+      let target = book.chapters.findIndex((c) => c.path === path);
+      if (target < 0 && path.startsWith("sections/")) {
+        const prefix = path.replace(/\/$/, "") + "/";
+        target = book.chapters.findIndex((c) =>
+          c.path.startsWith(prefix) && /^readme\.(md|markdown|mdown|mkd)$/i.test(c.path.slice(prefix.length)));
+      }
       if (target < 0) throw new Error();
       void navigate(target, 0, decodeURIComponent(url.hash.slice(1)));
     } catch {
@@ -545,6 +571,26 @@ async function openPath(
       readingClock.resume(book.token, book.track_reading_time ?? true);
   }
 }
+const isMarkdown = (path: string) => /\.(md|markdown|mdown|mkd)$/i.test(path);
+const isHtml = (path: string) => /\.html?$/i.test(path);
+let exportSnapshot: { token: string; body: HTMLElement; base: string } | undefined;
+let headingOutline: Toc[] = [];
+let baseToc: Toc[] = [];
+
+function refreshTextToc() {
+  if (!book) return;
+  if (isHtml(book.path) && headingOutline.length) {
+    book.toc = headingOutline;
+  } else if (book.metadata?.poetry && headingOutline.length) {
+    book.toc = baseToc.map((entry) => entry.chapter === chapter
+      ? { ...entry, children: [...entry.children, ...headingOutline] }
+      : entry);
+  } else {
+    book.toc = baseToc;
+  }
+  tocTree.render(book, navigateFromToc, openPartFromToc);
+  tocTree.active(chapter, true);
+}
 const isPaged = (opened: Book) => opened.pdf_size !== undefined || opened.comic_pages !== undefined;
 
 function updatePoetry() {
@@ -557,6 +603,11 @@ async function presentBook(opened: Book) {
   clearReader();
   await closePaged();
   book = opened;
+  baseToc = opened.toc;
+  headingOutline = [];
+  exportSnapshot = undefined;
+  $("#export-text").hidden = true;
+  $("#html-source").hidden = !isHtml(opened.path);
   browserReading = false;
   updateBrowserReading();
   updatePoetry();
@@ -617,7 +668,7 @@ async function pickBook(directory = false) {
     const path = await open({
       multiple: false,
       directory,
-      ...(directory ? {} : { filters: [{ name: "电子书", extensions: ["epub", "mobi", "azw3", "pdf", "cbz", "htm", "html", "md", "markdown", "txt"] }] }),
+      ...(directory ? {} : { filters: [{ name: "电子书", extensions: ["epub", "mobi", "azw3", "pdf", "cbz", "htm", "html", "md", "markdown", "mdown", "mkd", "txt"] }] }),
     });
     if (typeof path === "string") await openPath(path, false, undefined, true);
   } catch (e) {
@@ -629,6 +680,7 @@ const poetryCSS = `
   p{white-space:pre-wrap!important;margin:1.5em 0!important}
   h1,h2,h3{text-align:center!important}
   h1+h2{margin-top:.75em!important}
+  .leaf-poem-title:not(:first-child){margin-block-start:2.5em!important;text-align:center!important}
 `;
 
 function readerCSS() {
@@ -637,9 +689,12 @@ function readerCSS() {
     white: ["#fff", "#303630", "#627c55"],
     night: ["#222723", "#cbd2c7", "#a6bc95"],
   }[settings.theme];
-  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}::selection{background:#b9c7a8;color:#1f3020}p.plain-text{white-space:pre-line}${transcriptCSS}${book?.metadata?.poetry ? poetryCSS : ""}`;
+  const highlighter = settings.theme === "night"
+    ? ".hljs-keyword,.hljs-title,.hljs-built_in{color:#d3aaff}.hljs-string,.hljs-regexp{color:#a7d29c}.hljs-number,.hljs-literal{color:#e4b387}.hljs-comment{color:#aeb7aa}"
+    : "";
+  return `:root{color-scheme:${settings.theme === "night" ? "dark" : "light"};background:${colors[0]}!important;color:${colors[1]}!important}html{scroll-behavior:auto!important}body{box-sizing:border-box!important;max-width:${settings.width}px!important;margin:0 auto!important;padding:32px 44px 100px!important;background:${colors[0]}!important;color:${colors[1]}!important;font-family:${settings.serif ? "'Songti SC','Noto Serif CJK SC',Georgia,serif" : "system-ui,sans-serif"}!important;font-size:${settings.size}px!important;line-height:${settings.line}!important;overflow-wrap:anywhere}p,li,blockquote{font-size:inherit!important;line-height:inherit!important}h1,h2,h3{color:inherit!important;line-height:1.5!important;font-weight:500!important}h1{font-size:1.8em!important;margin:.5em 0 1em!important}h2{font-size:1.3em!important;margin:2em 0 1em!important}p{margin:1.1em 0!important}img,svg,video{max-width:100%!important;height:auto!important}a{color:${colors[2]}!important}pre,table{max-width:100%;overflow:auto}*{animation:none!important;transition:none!important}body>*:first-child{margin-top:0}::selection{background:#b9c7a8;color:#1f3020}p.plain-text{white-space:pre-line}${transcriptCSS}${markdownCSS}${highlighter}${book?.metadata?.poetry ? poetryCSS : ""}`;
 }
-function buildChapter(source: string, path: string, loadId: string) {
+async function buildChapter(source: string, path: string, loadId: string) {
   // Keep publisher styles, but never grant book markup scripts, forms, IPC or networking.
   // A template is inert even for images. DOMParser alone can fetch resources before sanitization.
   const template = document.createElement("template");
@@ -685,10 +740,12 @@ function buildChapter(source: string, path: string, loadId: string) {
   doc.body
     .querySelectorAll("style,link,title")
     .forEach((el) => doc.head.append(el));
+  const markdownBook = isMarkdown(book!.path) || (path.startsWith("sections/") && isMarkdown(path));
+  headingOutline = [];
   if (!/\.(epub|mobi|azw3)$/i.test(book!.path)) {
     const nodes = [...doc.body.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6")];
     const used = new Set([...doc.querySelectorAll("[id]")].map((el) => el.id));
-    const htmlBook = /\.html?$/i.test(book!.path);
+    const htmlBook = isHtml(book!.path);
     const headings: Toc[] = [];
     const parents: { level: number; item: Toc }[] = [];
     for (const node of nodes) {
@@ -701,17 +758,20 @@ function buildChapter(source: string, path: string, loadId: string) {
         node.id = id;
         used.add(id);
       }
-      if (!htmlBook) continue;
+      if (!htmlBook && !markdownBook) continue;
+      if (markdownBook) node.classList.add("leaf-poem-title");
       const level = Number(node.tagName[1]);
       while (parents.length && parents.at(-1)!.level >= level) parents.pop();
-      const item = { id: `heading-${node.id}`, title, chapter, fragment: node.id, children: [] };
+      const item = { id: `heading-${chapter}-${node.id}`, title, chapter, fragment: node.id, children: [] };
       (parents.at(-1)?.item.children ?? headings).push(item);
       parents.push({ level, item });
     }
-    if (headings.length) {
-      book!.toc = headings;
-      tocTree.render(book!, navigateFromToc, openPartFromToc);
-    }
+    headingOutline = headings;
+    refreshTextToc();
+  }
+  if (markdownBook && doc.body.querySelector(".math-inline,.math-display,pre > code[class*='language-']")) {
+    const { enhanceMarkdown } = await import("./markdown-rich");
+    await enhanceMarkdown(doc.body);
   }
   const scope = book!.chapters[chapter];
   if (scope?.start_fragment || scope?.end_fragment) {
@@ -739,6 +799,9 @@ function buildChapter(source: string, path: string, loadId: string) {
     convertFileSrc("", "epub") +
     `${book!.token}/${path.split("/").map(encodeURIComponent).join("/")}`;
   chapterBase = base.href;
+  if (markdownBook || isHtml(book!.path) || /\.txt$/i.test(book!.path)) {
+    exportSnapshot = { token: book!.token, body: doc.body.cloneNode(true) as HTMLElement, base: base.href };
+  }
   const bridgeUrl = new URL("reader-bridge.js", document.baseURI).href;
   // Opaque sandbox origin: the book has no parent DOM or IPC access. Only the
   // app-owned bridge script is allowed; publisher scripts are always removed.
@@ -753,6 +816,7 @@ function buildChapter(source: string, path: string, loadId: string) {
   const style = doc.createElement("style");
   style.id = "leaf-reader-style";
   style.textContent = readerCSS();
+
   doc.head.append(style);
   const bridge = doc.createElement("script");
   bridge.src = bridgeUrl;
@@ -764,6 +828,8 @@ function buildChapter(source: string, path: string, loadId: string) {
 async function renderChapter(index: number, targetFraction = 0, fragment = "") {
   if (!book) return;
   const ticket = ++revision;
+  exportSnapshot = undefined;
+  $("#export-text").hidden = true;
   loadingChapter = true;
   $("#chapter-loading").hidden = false;
   updatePosition();
@@ -775,7 +841,8 @@ async function renderChapter(index: number, targetFraction = 0, fragment = "") {
     if (ticket !== revision || !book) return;
     const loadId = `${book.token}-${ticket}`;
     chapter = index;
-    const srcdoc = buildChapter(source, book.chapters[index].path, loadId);
+    const srcdoc = await buildChapter(source, book.chapters[index].path, loadId);
+    if (ticket !== revision || !book) return;
     clearReader();
     const iframe = $<HTMLIFrameElement>("#reader");
     loadChannel = loadId;
@@ -798,6 +865,7 @@ async function renderChapter(index: number, targetFraction = 0, fragment = "") {
     });
     if (ticket !== revision) return;
     tocTree.active(chapter, true);
+    $("#export-text").hidden = !exportSnapshot;
   } catch (e) {
     showError(e);
   } finally {
@@ -1035,6 +1103,7 @@ $<HTMLButtonElement>("#poetry").onclick = () => {
       if (book !== current) return;
       current.metadata.poetry = enabled;
       updatePoetry();
+      refreshTextToc();
       sendReader("style", { css: readerCSS() });
     } catch (e) {
       showError(e);
@@ -1042,6 +1111,74 @@ $<HTMLButtonElement>("#poetry").onclick = () => {
       button.disabled = false;
     }
   })();
+};
+const githubDialog = $<HTMLDialogElement>("#github-dialog");
+let githubBusy = false;
+$("#github-book").onclick = () => showDialog(githubDialog);
+$("#github-cancel").onclick = () => githubDialog.close();
+githubDialog.addEventListener("cancel", (event) => {
+  if (githubBusy) event.preventDefault();
+});
+$<HTMLFormElement>("#github-form").onsubmit = async (event) => {
+  event.preventDefault();
+  if (githubBusy || busy) return;
+  githubBusy = true;
+  const controls = [...githubDialog.querySelectorAll<HTMLInputElement | HTMLButtonElement>("button,input")];
+  controls.forEach((control) => { control.disabled = true; });
+  const status = $("#github-status");
+  status.textContent = "正在读取 GitHub 仓库…";
+  try {
+    const { path, status: result } = await invoke<{ path: string; status: string }>("prepare_github_book", {
+      url: $<HTMLInputElement>("#github-url").value,
+      update: (event.submitter as HTMLButtonElement | null)?.value === "update",
+    });
+    githubDialog.close();
+    await openPath(path);
+    if (result === "updated" || result === "current") {
+      showError(result === "updated" ? "GitHub 书籍已更新" : "已是最新版本");
+    }
+  } catch (error) {
+    status.textContent = String(error);
+  } finally {
+    githubBusy = false;
+    controls.forEach((control) => { control.disabled = false; });
+  }
+};
+$("#html-source").onclick = async () => {
+  const current = book;
+  if (!current || !isHtml(current.path)) return;
+  try {
+    const source = await invoke<string>("get_html_source", { token: current.token });
+    if (book !== current) return;
+    $("#html-source-text").textContent = source;
+    showDialog($<HTMLDialogElement>("#html-source-dialog"));
+  } catch (error) {
+    showError(error);
+  }
+};
+$<HTMLDialogElement>("#html-source-dialog").addEventListener("close", () => {
+  $("#html-source-text").textContent = "";
+});
+$("#export-text").onclick = async () => {
+  const snapshot = exportSnapshot;
+  const current = book;
+  if (!snapshot || !current || snapshot.token !== current.token) return;
+  const button = $<HTMLButtonElement>("#export-text");
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    const title = current.chapters[chapter]?.title || current.title;
+    const name = title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 100) || "Leaf";
+    const path = await save({ defaultPath: `${name}.html`, filters: [{ name: "HTML", extensions: ["html"] }] });
+    if (!path || book !== current) return;
+    const { exportText } = await import("./text-export");
+    await exportText(snapshot, title, path, readerCSS());
+    showError("已导出当前章节");
+  } catch (error) {
+    showError(error);
+  } finally {
+    button.disabled = false;
+  }
 };
 $("#demo").onclick = () => void openPath(undefined, true);
 $("#library-nav").onclick = () => void libraryView();
@@ -1124,7 +1261,7 @@ if (isTauri()) {
       e.payload.type !== "over" && e.payload.type !== "enter";
     if (e.payload.type === "drop") {
       const path = e.payload.paths.find((p) =>
-        /\.(epub|mobi|azw3|pdf|cbz|html?|md|markdown|txt)$/i.test(p),
+        /\.(epub|mobi|azw3|pdf|cbz|html?|md|markdown|mdown|mkd|txt)$/i.test(p),
       ) ?? e.payload.paths[0];
       if (path) void openPath(path, false, undefined, true);
     }

@@ -1,0 +1,7 @@
+.task-mark { color: inherit; font: 1em system-ui; }
+.math-display { display: block; overflow-x: auto; padding: .4em 0; text-align: center; }
+.hljs { color: inherit; }
+.hljs-keyword, .hljs-title, .hljs-built_in { color: #7042a1; font-weight: 600; }
+.hljs-string, .hljs-regexp { color: #2c6640; }
+.hljs-number, .hljs-literal { color: #955113; }
+.hljs-comment { color: #5b6957; font-style: italic; }

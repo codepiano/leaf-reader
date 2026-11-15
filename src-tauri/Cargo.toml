@@ -13,6 +13,7 @@ cc = "1"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+base64 = "0.23"
 tempfile = "3"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
