@@ -67,6 +67,7 @@ async function install(page: Page) {
               localStorage.setItem(`progress.${active}`, JSON.stringify({ chapter: args.chapter, fraction: args.fraction }));
               return;
             case "plugin:event|listen": return 1;
+            case "take_finder_book": return null;
             case "close_book":
             case "frontend_ready": return;
             default: throw new Error(command);

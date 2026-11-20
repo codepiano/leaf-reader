@@ -30,6 +30,7 @@ test("opens a scanned PDF, jumps through its outline, zooms and resumes", async 
               localStorage.setItem("pdf.progress", JSON.stringify({ chapter: args.chapter, fraction: args.fraction }));
               return;
             case "plugin:event|listen": return 1;
+            case "take_finder_book": return null;
             case "close_book":
             case "frontend_ready":
             case "set_pdf_pages": return;

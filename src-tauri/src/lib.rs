@@ -1047,6 +1047,32 @@ fn frontend_ready() {
     }
 }
 
+#[derive(Default)]
+struct FinderOpen(Mutex<Option<PathBuf>>);
+
+#[tauri::command]
+fn take_finder_book(state: tauri::State<FinderOpen>) -> Result<Option<PathBuf>, String> {
+    Ok(state.0.lock().map_err(|e| e.to_string())?.take())
+}
+
+#[cfg(target_os = "macos")]
+fn handle_finder_open(app: &tauri::AppHandle, urls: Vec<tauri::Url>) {
+    use tauri::Emitter;
+
+    // Leaf has one reader window, so use the first EPUB in an open request.
+    let path = urls
+        .iter()
+        .filter_map(|url| url.to_file_path().ok())
+        .find(|path| {
+            path.extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("epub"))
+        });
+    if let Some(path) = path {
+        *app.state::<FinderOpen>().0.lock().unwrap() = Some(path);
+        let _ = app.emit_to("main", "finder-book-pending", ());
+    }
+}
+
 fn resource(app: &tauri::AppHandle, url: &str) -> Result<(Vec<u8>, &'static str), String> {
     let uri: tauri::http::Uri = url.parse().map_err(|_| "无效的资源地址")?;
     let path = percent_encoding::percent_decode_str(uri.path().trim_start_matches('/'))
@@ -1104,6 +1130,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(browser_reading::State::default())
+        .manage(FinderOpen::default())
         .setup(|app| {
             // Optional isolated profile for QA; never defaults to the user's source directory.
             let dir = std::env::var_os("LEAF_DATA_DIR")
@@ -1171,6 +1198,7 @@ pub fn run() {
             set_poetry,
             close_book,
             frontend_ready,
+            take_finder_book,
             library_snapshot,
             shelf_remove::remove_book,
             scan::scan_directories,
@@ -1188,8 +1216,14 @@ pub fn run() {
             pin_book,
             manage_group
         ])
-        .run(tauri::generate_context!())
-        .expect("无法启动 Leaf");
+        .build(tauri::generate_context!())
+        .expect("无法启动 Leaf")
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = _event {
+                handle_finder_open(_app, urls);
+            }
+        });
 }
 
 #[cfg(test)]

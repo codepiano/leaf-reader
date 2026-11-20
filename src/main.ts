@@ -77,6 +77,7 @@ let fraction = 0;
 let progressOffsets: number[] = [];
 let busy = false;
 let loadingChapter = false;
+let pendingFinderBook: string | null = null;
 let revision = 0;
 let scrollTimer: ReturnType<typeof setTimeout> | undefined;
 let loadChannel = "";
@@ -389,6 +390,7 @@ function setBusy(value: boolean) {
     $<WaButton>(`#${id}`).disabled = value;
   document.body.classList.toggle("busy", value);
   updateBrowserReading();
+  if (!value) openPendingFinderBook();
 }
 async function refreshShelf(invalidateCovers = false) {
   await shelf.refresh(invalidateCovers);
@@ -636,6 +638,24 @@ async function openPath(
     if (book && readerReady)
       readingClock.resume(book.token, book.track_reading_time ?? true);
   }
+}
+
+function openPendingFinderBook() {
+  if (!pendingFinderBook || busy || loadingChapter) return;
+  // Let the current reader action finish updating its progress before opening.
+  queueMicrotask(() => {
+    if (!pendingFinderBook || busy || loadingChapter) return;
+    const path = pendingFinderBook;
+    pendingFinderBook = null;
+    void openPath(path, false, undefined, true);
+  });
+}
+
+async function receiveFinderBook() {
+  const path = await invoke<string | null>("take_finder_book");
+  if (!path) return;
+  pendingFinderBook = path;
+  openPendingFinderBook();
 }
 const isMarkdown = (path: string) => /\.(md|markdown|mdown|mkd)$/i.test(path);
 const isHtml = (path: string) => /\.html?$/i.test(path);
@@ -950,6 +970,7 @@ async function renderChapter(index: number, targetFraction = 0, fragment = "", s
       loadingChapter = false;
       $("#chapter-loading").hidden = true;
       updatePosition();
+      openPendingFinderBook();
     }
   }
 }
@@ -1021,6 +1042,7 @@ async function renderPage(index: number, zoom?: number | null) {
   } finally {
     loadingChapter = false;
     updatePosition();
+    openPendingFinderBook();
   }
   if (zoom === undefined) await flushProgress();
 }
@@ -1095,6 +1117,7 @@ async function renderFlow(index: number, value = 0, fragment = "", search?: Read
     loadingChapter = false;
     $("#chapter-loading").hidden = true;
     if (book === current) updatePosition();
+    openPendingFinderBook();
   }
 }
 
@@ -1115,6 +1138,7 @@ $<HTMLButtonElement>("#continuous-mode").onclick = async () => {
     showError(error);
   } finally {
     busy = false;
+    openPendingFinderBook();
     button.disabled = false;
     updateBrowserReading();
   }
@@ -1522,6 +1546,10 @@ void refreshShelf()
   );
 if (isTauri()) {
   const win = getCurrentWindow();
+  void win
+    .listen("finder-book-pending", () => void receiveFinderBook().catch(showError))
+    .then(receiveFinderBook)
+    .catch(showError);
   void win.onDragDropEvent((e) => {
     $("#drop-overlay").hidden =
       e.payload.type !== "over" && e.payload.type !== "enter";
